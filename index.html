@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beach SummonBot</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    height: 100vh;
+    background: linear-gradient(to bottom, #00c6ff, #0072ff 40%, #fdd79a 80%, #f7c873);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    overflow: hidden;
+}
+
+.container {
+    width: 95%;
+    max-width: 420px;
+    padding: 25px;
+    border-radius: 20px;
+    backdrop-filter: blur(15px);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    text-align: center;
+}
+
+h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.status {
+    font-size: 14px;
+    opacity: 0.9;
+    margin-bottom: 20px;
+}
+
+.map {
+    position: relative;
+    height: 200px;
+    border-radius: 15px;
+    background: linear-gradient(to bottom, #0093E9, #80D0C7);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+/* Base */
+.base {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 25px;
+    height: 25px;
+    background: #ffcc70;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #ffcc70;
+}
+
+/* User */
+.user {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 25px;
+    height: 25px;
+    background: #ff6ec7;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #ff6ec7;
+}
+
+/* Bot */
+.bot {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 25px;
+    height: 25px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 20px #ffffff;
+    transition: transform 3s ease-in-out;
+}
+
+/* Button */
+button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    background: linear-gradient(45deg, #ff9966, #ff5e62);
+    color: white;
+    transition: 0.3s ease;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+}
+
+button:hover {
+    transform: scale(1.05);
+}
+
+.footer {
+    font-size: 11px;
+    margin-top: 15px;
+    opacity: 0.7;
+    color: black;
+}
+
+/* Sand particle effect */
+.sand {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.sand-particle {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: rgba(255, 230, 180, 0.8);
+    border-radius: 50%;
+    opacity: 0.8;
+    animation: float 5s linear infinite;
+}
+
+@keyframes float {
+    0% {
+        transform: translateY(0px) translateX(0px);
+        opacity: 0.8;
+    }
+    50% {
+        opacity: 0.3;
+    }
+    100% {
+        transform: translateY(-200px) translateX(50px);
+        opacity: 0;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>SummonBot</h1>
+    <div class="status" id="status">Status: Awaiting command</div>
+
+    <div class="map">
+        <div class="base"></div>
+        <div class="user"></div>
+        <div class="bot" id="bot"></div>
+        <div class="sand"></div> <!-- Sand particles container -->
+    </div>
+
+    <button id="actionBtn">SUMMON</button>
+
+    <div class="footer">
+        Coastal Autonomous Service System
+    </div>
+</div>
+
+<script>
+const bot = document.getElementById("bot");
+const button = document.getElementById("actionBtn");
+const statusText = document.getElementById("status");
+
+// ESP32 IDs
+const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+let device, characteristic;
+let keepAliveInterval;
+let state = "idle"; 
+// idle → going → arrived → returning
+
+button.addEventListener("click", async () => {
+    // If not connected yet, connect (get thru browser security thing)
+    if (!device) {
+        await connectBluetooth();
+    }
+
+    if (state === "idle") {
+        summonBot();
+    } else if (state === "arrived") {
+        returnToBase();
+    }
+});
+
+// For sending a connection to the ESP32 (Same ID as above)
+async function connectBluetooth() {
+    try {
+        statusText.innerText = "Status: Pairing Bluetooth...";
+        device = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'ESP32' }], // Finds any device starting with "ESP32"
+            optionalServices: [SERVICE_UUID]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        statusText.innerText = "Status: Bluetooth Connected!";
+
+        keepAliveInterval = setInterval(async () => {
+            if (characteristic) {
+                // Send a "heartbeat" signal (value 9) every 2 seconds 
+                // to keep the radio active for sniffers
+                try { await characteristic.writeValue(new Uint8Array([9])); }
+                catch (e) { console.log("Heartbeat failed"); }
+            }
+        }, 2000);
+
+    } catch (error) {
+        console.log("Bluetooth Error: " + error);
+        statusText.innerText = "Status: Connection Failed";
+    }
+}
+
+async function sendBleSignal(value) {
+    if (characteristic) {
+        const data = new Uint8Array([value]);
+        await characteristic.writeValue(data);
+        console.log("Sent to ESP32: " + value);
+    }
+}
+
+function summonBot() {
+    state = "going";
+    statusText.innerText = "Status: Bot en route across the beach...";
+    button.disabled = true;
+    button.innerText = "TRAVELLING...";
+
+    // --- PHYSICAL SIGNAL ---
+    sendBleSignal(1); // Send '1' to start moving
+
+    // Move diagonally to user position (UI Visual Feedback)
+    bot.style.transform = "translate(300px, -150px)";
+
+    setTimeout(() => {
+        state = "arrived";
+        statusText.innerText = "Status: Bot arrived at your location!";
+        button.disabled = false;
+        button.innerText = "RETURN TO BASE";
+
+        // --- PHYSICAL SIGNAL ---
+        sendBleSignal(0); // Send '0' to stop
+
+    }, 3000);
+}
+
+function returnToBase() {
+    state = "returning";
+    statusText.innerText = "Status: Returning to base...";
+    button.disabled = true;
+    button.innerText = "RETURNING...";
+
+    // --- PHYSICAL SIGNAL ---
+    sendBleSignal(2); // Send '2' for return command
+
+    // Move back to original position (UI Visual Feedback)
+    bot.style.transform = "translate(0px, 0px)";
+
+    setTimeout(() => {
+        state = "idle";
+        statusText.innerText = "Status: Awaiting command";
+        button.disabled = false;
+        button.innerText = "SUMMON BOT";
+
+        // --- PHYSICAL SIGNAL ---
+        sendBleSignal(0); // Send '0' to stop
+
+    }, 3000);
+}
+
+// Sand particle effect
+const sandContainer = document.querySelector('.sand');
+
+function createSandParticles(count) {
+    for (let i = 0; i < count; i++) {
+        const particle = document.createElement('div');
+        particle.classList.add('sand-particle');
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.top = Math.random() * 100 + '%';
+        particle.style.animationDuration = (3 + Math.random() * 3) + 's';
+        sandContainer.appendChild(particle);
+    }
+}
+
+// Generate 50 sand particles
+createSandParticles(50);
+</script>
+
+</body>
+</html>
