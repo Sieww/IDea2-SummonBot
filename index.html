@@ -208,7 +208,7 @@ async function connectBluetooth() {
     try {
         statusText.innerText = "Status: Pairing Bluetooth...";
         device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'ESP32' }], // Finds any device starting with "ESP32"
+            filters: [{ namePrefix: 'MAC' }], // Finds any device starting with "ESP32"
             optionalServices: [SERVICE_UUID]
         });
 
@@ -283,6 +283,7 @@ function returnToBase() {
         button.innerText = "SUMMON BOT";
 
         // --- PHYSICAL SIGNAL ---
+
         sendBleSignal(0); // Send '0' to stop
 
     }, 3000);
