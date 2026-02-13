@@ -242,7 +242,7 @@ async function sendBleSignal(value) {
   } catch (error) {
     console.log("Retrying command due to GATT busy...");
     // Wait 100ms and try one more time if it was busy
-    setTimeout(() => sendCommand(value), 100);
+    setTimeout(() => sendBleSignal(value), 100);
   }
 }
 
@@ -316,5 +316,6 @@ createSandParticles(50);
 
 </body>
 </html>
+
 
 
