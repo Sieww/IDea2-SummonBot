@@ -233,7 +233,6 @@ async function connectBluetooth() {
 }
 
 async function sendBleSignal(value) {
-    async function sendCommand(value) {
   try {
     if (characteristic) {
       const data = new Uint8Array([value]);
@@ -246,7 +245,7 @@ async function sendBleSignal(value) {
     setTimeout(() => sendCommand(value), 100);
   }
 }
-}
+
 
 function summonBot() {
     state = "going";
@@ -317,4 +316,5 @@ createSandParticles(50);
 
 </body>
 </html>
+
 
