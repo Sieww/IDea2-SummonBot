@@ -233,11 +233,19 @@ async function connectBluetooth() {
 }
 
 async function sendBleSignal(value) {
+    async function sendCommand(value) {
+  try {
     if (characteristic) {
-        const data = new Uint8Array([value]);
-        await characteristic.writeValue(data);
-        console.log("Sent to ESP32: " + value);
+      const data = new Uint8Array([value]);
+      await characteristic.writeValue(data);
+      console.log("Command sent: " + value);
     }
+  } catch (error) {
+    console.log("Retrying command due to GATT busy...");
+    // Wait 100ms and try one more time if it was busy
+    setTimeout(() => sendCommand(value), 100);
+  }
+}
 }
 
 function summonBot() {
@@ -309,3 +317,4 @@ createSandParticles(50);
 
 </body>
 </html>
+
