@@ -188,6 +188,7 @@ const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 let device, characteristic;
 let keepAliveInterval;
 let state = "idle"; 
+let writeInProgress = false; // <-- New: prevents overlapping writes
 // idle → going → arrived → returning
 
 button.addEventListener("click", async () => {
@@ -221,15 +222,10 @@ async function connectBluetooth() {
         characteristic.addEventListener("characteristicvaluechanged", handleNotification);
         console.log("Notifications enabled");
 
-
-        keepAliveInterval = setInterval(async () => {
-            if (characteristic) {
-                // Send a "heartbeat" signal (value 9) every 2 seconds 
-                // to keep the radio active for sniffers
-                try { await characteristic.writeValue(new Uint8Array([9])); }
-                catch (e) { console.log("Heartbeat failed"); }
-            }
-        }, 2000);
+        // Heartbeat every 3s, safely using writeInProgress
+        keepAliveInterval = setInterval(() => {
+            sendBleSignal(9); // heartbeat
+        }, 3000);
 
     } catch (error) {
         console.log("Bluetooth Error: " + error);
@@ -237,20 +233,20 @@ async function connectBluetooth() {
     }
 }
 
+// --- Updated send function to prevent GATT busy ---
 async function sendBleSignal(value) {
-  try {
-    if (characteristic) {
-      const data = new Uint8Array([value]);
-      await characteristic.writeValue(data);
-      console.log("Command sent: " + value);
-    }
-  } catch (error) {
-    console.log("Retrying command due to GATT busy...");
-    // Wait 100ms and try one more time if it was busy
-    setTimeout(() => sendBleSignal(value), 100);
-  }
-}
+    if (!characteristic || writeInProgress) return;
 
+    writeInProgress = true;
+    try {
+        await characteristic.writeValue(new Uint8Array([value]));
+        console.log("Command sent: " + value);
+    } catch (error) {
+        console.log("Heartbeat failed or GATT busy");
+    } finally {
+        writeInProgress = false;
+    }
+}
 
 function summonBot() {
     state = "going";
@@ -295,7 +291,6 @@ function returnToBase() {
         button.innerText = "SUMMON BOT";
 
         // --- PHYSICAL SIGNAL ---
-
         sendBleSignal(0); // Send '0' to stop
 
     }, 3000);
@@ -315,33 +310,32 @@ function createSandParticles(count) {
     }
 }
 
+// --- Notification handler ---
 function handleNotification(event) {
     const decoder = new TextDecoder();
     const value = decoder.decode(event.target.value);
 
+    // RSSI only
     const rssi = parseInt(value);
-
     console.log("📶 RSSI received:", rssi);
 
-    // If your sniffer sends an ID + RSSI together,
-    // you should send "id=rssi" strings from ESP32.
-    // Example expected format:  "2:-88"
-
+    // ID + RSSI
     if (value.includes(":")) {
         const parts = value.split(":");
         const id = parts[0];
         const rssiValue = parseInt(parts[1]);
-
         console.log(`📡 Sniffer ${id} RSSI = ${rssiValue}`);
     }
 }
 
 // Generate 50 sand particles
 createSandParticles(50);
+
 </script>
 
 </body>
 </html>
+
 
 
 
