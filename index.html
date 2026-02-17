@@ -208,7 +208,7 @@ async function connectBluetooth() {
     try {
         statusText.innerText = "Status: Pairing Bluetooth...";
         device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'MAC' }], // Finds any device starting with "ESP32"
+            filters: [{ namePrefix: 'Summon' }], // Finds any device starting with "ESP32"
             optionalServices: [SERVICE_UUID]
         });
 
@@ -342,6 +342,7 @@ createSandParticles(50);
 
 </body>
 </html>
+
 
 
 
