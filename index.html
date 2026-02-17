@@ -102,7 +102,7 @@ button {
     padding: 12px;
     border: none;
     border-radius: 30px;
-    font-size: 50px;
+    font-size: 16px;
     font-weight: 600;
     cursor: pointer;
     background: linear-gradient(45deg, #ff9966, #ff5e62);
@@ -217,6 +217,11 @@ async function connectBluetooth() {
         characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
         statusText.innerText = "Status: Bluetooth Connected!";
 
+        await characteristic.startNotifications();
+        characteristic.addEventListener("characteristicvaluechanged", handleNotification);
+        console.log("Notifications enabled");
+
+
         keepAliveInterval = setInterval(async () => {
             if (characteristic) {
                 // Send a "heartbeat" signal (value 9) every 2 seconds 
@@ -310,12 +315,34 @@ function createSandParticles(count) {
     }
 }
 
+function handleNotification(event) {
+    const decoder = new TextDecoder();
+    const value = decoder.decode(event.target.value);
+
+    const rssi = parseInt(value);
+
+    console.log("📶 RSSI received:", rssi);
+
+    // If your sniffer sends an ID + RSSI together,
+    // you should send "id=rssi" strings from ESP32.
+    // Example expected format:  "2:-88"
+
+    if (value.includes(":")) {
+        const parts = value.split(":");
+        const id = parts[0];
+        const rssiValue = parseInt(parts[1]);
+
+        console.log(`📡 Sniffer ${id} RSSI = ${rssiValue}`);
+    }
+}
+
 // Generate 50 sand particles
 createSandParticles(50);
 </script>
 
 </body>
 </html>
+
 
 
 
