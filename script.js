@@ -65,18 +65,24 @@ async function connectBluetooth() {
     }
 }
 
-async function sendBleSignal(value) {
+async function sendBleSignal(value, isPriority = false) {
     // If a heartbeat is happening and this is a MOVE command, wait slightly
     if (writeInProgress && isPriority) {
         await new Promise(res => setTimeout(res, 100)); // Short 100ms pause
     }
+
+    // If we are already writing and this ISN'T a priority move command, just skip it
+    if (writeInProgress && !isPriority) return;
 
     if (!characteristic || writeInProgress) return;
 
     writeInProgress = true;
     try {
         await characteristic.writeValue(new Uint8Array([value]));
-        console.log("Command sent: " + value);
+        if(value !== 9) // skipping the heartbeat signal logs
+        {
+            console.log("Priority Command sent: " + value);
+        }
     } catch (error) {
         console.log("Heartbeat failed or GATT busy");
     } finally {
@@ -91,7 +97,7 @@ function summonBot() {
     button.innerText = "TRAVELLING...";
 
     // PHYSICAL SIGNAL
-    sendBleSignal(1); // Send '1' to start moving
+    sendBleSignal(1, true); // Send '1' to start moving
 
 
     // Move diagonally (UI Visual Feedback)
@@ -105,7 +111,7 @@ function summonBot() {
         button.innerText = "RETURN TO BASE";
 
         // PHYSICAL SIGNAL
-        sendBleSignal(0); // Send '0' to stop
+        sendBleSignal(0, true); // Send '0' to stop
 
     }, travelTime * 1000);
 }
@@ -117,7 +123,7 @@ function returnToBase() {
     button.innerText = "RETURNING...";
     
     // PHYSICAL SIGNAL
-    sendBleSignal(2); // Send '2' for return command
+    sendBleSignal(2, true); // Send '2' for return command
 
     // Move back to original position (UI Visual Feedback)
     bot.style.transform = "translate(0px, 0px)";
@@ -129,27 +135,10 @@ function returnToBase() {
         button.innerText = "SUMMON";
 
         // PHYSICAL SIGNAL
-        sendBleSignal(0); // Send '0' to stop
+        sendBleSignal(0, true); // Send '0' to stop
 
     }, travelTime * 1000);
 }
-
-// function handleNotification(event) {
-//     const decoder = new TextDecoder();
-//     const value = decoder.decode(event.target.value);
-
-//     // RSSI only
-//     const rssi = parseInt(value);
-//     console.log("📶 RSSI received:", rssi);
-
-//     // ID + RSSI
-//     if (value.includes(":")) {
-//         const parts = value.split(":");
-//         const id = parts[0];
-//         const rssiValue = parseInt(parts[1]);
-//         console.log(`📡 Sniffer ${id} RSSI = ${rssiValue}`);
-//     }
-// }
 
 function handleNotification(event) {
     const decoder = new TextDecoder();
@@ -201,7 +190,7 @@ function createSandParticles(count) {
 class RSSIKalmanFilter {
   constructor(initialRSSI = -60) {
     // Expected movement speed of user (0.01 = slow/stable, 0.1 = fast movement)
-    this.processChangeRate = 0.01; 
+    this.processChangeRate = 0.5; 
 
     // The dBm fluctuation you see in your raw data
     // 2 - 10 based on '10dBm'
@@ -245,4 +234,5 @@ function processSignal(nodeId, rawRSSI) {
 }
 
 // UI: Generate Sand Particles
+
 createSandParticles(50);
