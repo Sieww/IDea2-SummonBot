@@ -35,8 +35,19 @@ let n_factor = 2.0; // path loss exponent, to be calculated. default 2.0
 
 const calibrationDuration = 4000;
 
-function selectEnvironment(distance) {
+async function selectEnvironment(distance) {
+
     if (state !== "idle" || sampling) return;
+
+    // If not connected, trigger the pairing popup
+    if (!device) {
+        try {
+            await connectBluetooth();
+        } catch (err) {
+            statusText.innerText = "Connection required to calibrate.";
+            return; // Exit if user cancels the Bluetooth popup
+        }
+    }
 
     calibrationBuffer = []; // reset just in case (already resetting at finalize)
 
