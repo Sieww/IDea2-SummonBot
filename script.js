@@ -223,9 +223,10 @@ function returnToBase() {
 }
 
 function lockEnvironment(lock) {
-    btn1m.disabled = lock;
-    btn3m.disabled = lock;
-    recalibrateBtn.disabled = lock;
+    // btn1m.disabled = lock;
+    // btn3m.disabled = lock;
+    // recalibrateBtn.disabled = lock;
+    console.log(`locking env. placeholder. set to: ${lock}`);
 }
 
 // ======= Functions specific to BLE trilateration subsystem =====================
@@ -358,4 +359,5 @@ function calculateDistance(rssi) {
 }
 
 // Trilateration Logic
+
 
