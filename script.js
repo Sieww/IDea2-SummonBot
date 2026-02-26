@@ -212,9 +212,9 @@ function returnToBase() {
 }
 
 function lockEnvironment(lock) {
-    btn1m.disabled = lock;
-    btn3m.disabled = lock;
-    recalibrateBtn.disabled = lock;
+    // btn1m.disabled = lock;
+    // btn3m.disabled = lock;
+    // recalibrateBtn.disabled = lock;
 }
 
 // =============================
@@ -296,4 +296,5 @@ function calculateDistance(rssi) {
     if (rssiAt1m === null || n_factor <= 0) return -1;
     const exponent = (rssiAt1m - rssi) / (10 * n_factor);
     return Math.pow(10, exponent);
+
 }
