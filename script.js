@@ -95,8 +95,9 @@ async function selectEnvironment(distance) {
 function finalizeCalibration(distance) {
     // If temp array empty, show failed
     if (calibrationBuffer.length === 0) {
-        console.error("No signal detected! Calibration failed.");
+        console.error("No signal detected! Calibration failed. Please try again.");
         sampling = false;
+        button.disabled = false; 
         return;
     }
     
