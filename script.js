@@ -122,7 +122,10 @@ function finalizeCalibration(distance) {
         n_factor = (rssiAt1m - rssiAt3m) / 4.771;
         
         // Sanity check: n is usually between 1.5 and 4.5
-        if (n_factor < 1) n_factor = 2.0; 
+        if (n_factor < 2.0) {
+            n_factor = 2.0;
+            console.warn("Calculated n was too low (" + n_factor.toFixed(2) + "). Forcing n = 2.0");        
+        }
         
         console.log(`[CALIBRATION] Calculated Path Loss Exponent (n): ${n_factor.toFixed(2)}`);
     }
