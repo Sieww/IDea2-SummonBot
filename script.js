@@ -1,16 +1,20 @@
-// DOM (interaction w/ html)
 const bot = document.getElementById("bot");
-const button = document.getElementById("actionBtn");
+const summonBtn = document.getElementById("actionBtn");
+const recalibrateBtn = document.getElementById("recalibrateBtn");
 const statusText = document.getElementById("status");
+const progressText = document.getElementById("progressText");
 
-const calibrateBtn = document.getElementById("calibrateBtn");
-const distanceInput = document.getElementById("distanceInput");
-const calibrateStatus = document.getElementById("calibrateStatus");
+const btn1m = document.getElementById("btn1m");
+const btn3m = document.getElementById("btn3m");
 
-const sandContainer = document.querySelector('.sand');
-
+let calibratedEnvs = new Set();
+let travelTime = 2;
 let state = "idle";
-let travelTime = 3;
+let sampling = false; // prevents double sampling
+
+/* ENV BUTTONS */
+btn1m.addEventListener("click", () => selectEnvironment(1));
+btn3m.addEventListener("click", () => selectEnvironment(3));
 
 // ESP32 IDs
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -20,22 +24,200 @@ let device, characteristic;
 let keepAliveInterval;
 let writeInProgress = false; // to prevent overlapping writes
 
-// For Kalman filter
+// Variables for Kalman filter
 const activeNodes = {}; // node manager
 
-button.addEventListener("click", async () => {
+// Variables for calibration
+let calibrationBuffer = [];
+let rssiAt1m = null;
+let rssiAt3m = null;
+let n_factor = 2.0; // path loss exponent, to be calculated. default 2.0
+
+const calibrationDuration = 4000;
+
+function selectEnvironment(distance) {
+    if (state !== "idle" || sampling) return;
+
+    calibrationBuffer = []; // reset just in case (already resetting at finalize)
+
+    const button = distance === 1 ? btn1m : btn3m;
+
+    sampling = true;
+    button.disabled = true;
+    statusText.innerText = `Calibrating ${distance}m environment...`;
+
+    const duration = calibrationDuration;
+    let start = null;
+
+    // Create progress overlay
+    const progressOverlay = document.createElement("div");
+    progressOverlay.style.position = "absolute";
+    progressOverlay.style.left = "0";
+    progressOverlay.style.top = "0";
+    progressOverlay.style.height = "100%";
+    progressOverlay.style.width = "0%";
+    progressOverlay.style.borderRadius = "30px";
+    progressOverlay.style.background = "rgba(255,255,255,0.4)";
+    progressOverlay.style.transition = "width 0.05s linear";
+
+    button.style.position = "relative";
+    button.style.overflow = "hidden";
+    button.appendChild(progressOverlay);
+
+    function animate(timestamp) {
+        if (!start) start = timestamp;
+        let elapsed = timestamp - start;
+        let percent = Math.min((elapsed / duration) * 100, 100);
+        progressOverlay.style.width = percent + "%";
+
+        if (elapsed < duration) {
+            requestAnimationFrame(animate);
+        } else {
+            button.removeChild(progressOverlay);
+            finalizeCalibration(distance);
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+function finalizeCalibration(distance) {
+    // If temp array empty, show failed
+    if (calibrationBuffer.length === 0) {
+        console.error("No signal detected! Calibration failed.");
+        sampling = false;
+        return;
+    }
+    
+    // calculate average of signals, save to respective vars
+    const averageRSSI = calibrationBuffer.reduce((a, b) => a + b, 0) / calibrationBuffer.length;
+
+    if (distance === 1) {
+        rssiAt1m = averageRSSI; // We now have 'A'
+        console.log(`[CALIBRATION] 1m Baseline (A) set to: ${rssiAt1m.toFixed(2)}`);
+    } 
+    else if (distance === 3) {
+        rssiAt3m = averageRSSI;
+        console.log(`[CALIBRATION] 3m Reference set to: ${rssiAt3m.toFixed(2)}`);
+    }
+    
+
+    // Calculate Path Loss Exponent (n) only if both are done
+    if (rssiAt1m !== null && rssiAt3m !== null) {
+        /* Formula for n: (RSSI_1m - RSSI_3m) / (10 * log10(d2/d1))
+           Since d2=3 and d1=1: 10 * log10(3) = 4.771
+        */
+        n_factor = (rssiAt1m - rssiAt3m) / 4.771;
+        
+        // Sanity check: n is usually between 1.5 and 4.5
+        if (n_factor < 1) n_factor = 2.0; 
+        
+        console.log(`[CALIBRATION] Calculated Path Loss Exponent (n): ${n_factor.toFixed(2)}`);
+    }
+
+    // UI handling
+    calibratedEnvs.add(distance);
+
+    btn1m.classList.toggle("active", calibratedEnvs.has(1));
+    btn3m.classList.toggle("active", calibratedEnvs.has(3));
+
+    progressText.innerText = `Calibration Progress: ${calibratedEnvs.size} / 2`;
+
+    if (calibratedEnvs.size === 2) {
+        summonBtn.disabled = false;
+        statusText.innerText = "System calibrated. Ready for deployment.";
+        travelTime = 3;
+    } else {
+        statusText.innerText = "Calibration in progress...";
+    }
+
+    sampling = false;
+    const button = distance === 1 ? btn1m : btn3m;
+    button.disabled = false;
+
+    calibrationBuffer = [];
+}
+
+/* RECALIBRATE BUTTON */
+recalibrateBtn.addEventListener("click", () => {
+    if (state !== "idle" || sampling) return;
+
+    calibratedEnvs.clear();
+    btn1m.classList.remove("active");
+    btn3m.classList.remove("active");
+    progressText.innerText = "Calibration Progress: 0 / 2";
+    summonBtn.disabled = true;
+    statusText.innerText = "Calibration reset. Select both environments.";
+});
+
+/* SUMMON BUTTON */
+summonBtn.addEventListener("click", async () => {
     // If not connected yet, connect to ESP32 (get thru browser security thing)
     if (!device) {
         await connectBluetooth();
     }
 
-    if (state === "idle") {
-        summonBot();
-    } else if (state === "arrived") {
-        returnToBase();
-    }
+    if (state === "idle") summonBot();
+    else if (state === "arrived") returnToBase();
 });
 
+function summonBot() {
+    state = "going";
+    lockEnvironment(true);
+    summonBtn.disabled = true;
+    statusText.innerText = "Bot en route...";
+    bot.style.transition = `transform ${travelTime}s ease-in-out`;
+    bot.style.transform = "translate(300px, -150px)";
+
+    // PHYSICAL SIGNAL
+    sendBleSignal(1); // Send '1' to start moving
+
+    setTimeout(() => {
+        state = "arrived";
+        summonBtn.disabled = false;
+        summonBtn.innerText = "RETURN TO BASE";
+        statusText.innerText = "Bot arrived.";
+
+        // PHYSICAL SIGNAL
+        sendBleSignal(0); // Send '0' to stop
+
+    }, travelTime * 1000);
+}
+
+function returnToBase() {
+    state = "returning";
+    summonBtn.disabled = true;
+    summonBtn.innerText = "RETURNING...";
+    statusText.innerText = "Returning to base...";
+
+    // PHYSICAL SIGNAL
+    sendBleSignal(2); // Send '2' for return command
+
+    bot.style.transform = "translate(0px, 0px)";
+
+    setTimeout(() => {
+        state = "idle";
+        summonBtn.innerText = "SUMMON";
+
+        // PHYSICAL SIGNAL
+        sendBleSignal(0); // Send '0' to stop
+
+        calibratedEnvs.clear();
+        btn1m.classList.remove("active");
+        btn3m.classList.remove("active");
+        progressText.innerText = "Calibration Progress: 0 / 2";
+        lockEnvironment(false);
+        statusText.innerText = "Calibration required.";
+    }, travelTime * 1000);
+}
+
+function lockEnvironment(lock) {
+    btn1m.disabled = lock;
+    btn3m.disabled = lock;
+    recalibrateBtn.disabled = lock;
+}
+
+// ======= Functions specific to BLE trilateration subsystem =====================
 // For sending a connection to the ESP32 with specific UUID
 async function connectBluetooth() {
     try {
@@ -65,79 +247,23 @@ async function connectBluetooth() {
     }
 }
 
-async function sendBleSignal(value, isPriority = false) {
+async function sendBleSignal(value) {
     // If a heartbeat is happening and this is a MOVE command, wait slightly
     if (writeInProgress && isPriority) {
         await new Promise(res => setTimeout(res, 100)); // Short 100ms pause
     }
-
-    // If we are already writing and this ISN'T a priority move command, just skip it
-    if (writeInProgress && !isPriority) return;
 
     if (!characteristic || writeInProgress) return;
 
     writeInProgress = true;
     try {
         await characteristic.writeValue(new Uint8Array([value]));
-        if(value !== 9) // skipping the heartbeat signal logs
-        {
-            console.log("Priority Command sent: " + value);
-        }
+        console.log("Command sent: " + value);
     } catch (error) {
         console.log("Heartbeat failed or GATT busy");
     } finally {
         writeInProgress = false;
     }
-}
-
-function summonBot() {
-    state = "going";
-    statusText.innerText = "Status: Bot en route across the beach...";
-    button.disabled = true;
-    button.innerText = "TRAVELLING...";
-
-    // PHYSICAL SIGNAL
-    sendBleSignal(1, true); // Send '1' to start moving
-
-
-    // Move diagonally (UI Visual Feedback)
-    bot.style.transition = `transform ${travelTime}s ease-in-out`;
-    bot.style.transform = "translate(300px, -150px)";
-
-    setTimeout(() => {
-        state = "arrived";
-        statusText.innerText = "Status: Bot arrived at your location!";
-        button.disabled = false;
-        button.innerText = "RETURN TO BASE";
-
-        // PHYSICAL SIGNAL
-        sendBleSignal(0, true); // Send '0' to stop
-
-    }, travelTime * 1000);
-}
-
-function returnToBase() {
-    state = "returning";
-    statusText.innerText = "Status: Returning to base...";
-    button.disabled = true;
-    button.innerText = "RETURNING...";
-    
-    // PHYSICAL SIGNAL
-    sendBleSignal(2, true); // Send '2' for return command
-
-    // Move back to original position (UI Visual Feedback)
-    bot.style.transform = "translate(0px, 0px)";
-
-    setTimeout(() => {
-        state = "idle";
-        statusText.innerText = "Status: Awaiting command";
-        button.disabled = false;
-        button.innerText = "SUMMON";
-
-        // PHYSICAL SIGNAL
-        sendBleSignal(0, true); // Send '0' to stop
-
-    }, travelTime * 1000);
 }
 
 function handleNotification(event) {
@@ -148,41 +274,19 @@ function handleNotification(event) {
     if (value.includes(":")) {
         const [id, rssiStr] = value.split(":");
         const rawRssi = parseInt(rssiStr);
-        const filteredRssi = processSignal(id, rawRssi);
+        const filteredRssi = processSignal(id, rawRssi);    
         
-        // Trigger UI updates based on filteredRssi, not rawRssi
-    }
-}
+        // if sampling for calibration, add to the calibration buffer list ONLY FROM NODE 0
+        if (sampling && id === "0") {
+            calibrationBuffer.push(filteredRssi);
+            console.log(`Calibrating with Node 0... Current: ${filteredRssi.toFixed(2)}`);
+        }
 
-calibrateBtn.addEventListener("click", () => {
-    const distance = parseFloat(distanceInput.value);
-    calibrateStatus.className = "calibrate-status";
-
-    if (isNaN(distance) || distance <= 0) {
-        calibrateStatus.innerText = "Please enter a valid distance.";
-        calibrateStatus.classList.add("error");
-        return;
-    }
-
-    if (distance <= 100) {
-        calibrateStatus.innerText = "Calibration successful. Optimal range confirmed.";
-        calibrateStatus.classList.add("success");
-        travelTime = Math.max(1, distance / 50);
-    } else {
-        calibrateStatus.innerText = "Distance too far. Bot may take longer.";
-        calibrateStatus.classList.add("warning");
-        travelTime = distance / 40;
-    }
-});
-
-function createSandParticles(count) {
-    for (let i = 0; i < count; i++) {
-        const particle = document.createElement('div');
-        particle.classList.add('sand-particle');
-        particle.style.left = Math.random() * 100 + '%';
-        particle.style.top = Math.random() * 100 + '%';
-        particle.style.animationDuration = (3 + Math.random() * 3) + 's';
-        sandContainer.appendChild(particle);
+        // If system is calibrated, calculate and show real distance for ALL 3 NODES
+        if (calibratedEnvs.size === 2) {
+            const distance = calculateDistance(filteredRssi);
+            console.log(`Node ${id}: ~ ${distance.toFixed(2)}m away`);
+        }
     }
 }
 
@@ -190,7 +294,7 @@ function createSandParticles(count) {
 class RSSIKalmanFilter {
   constructor(initialRSSI = -60) {
     // Expected movement speed of user (0.01 = slow/stable, 0.1 = fast movement)
-    this.processChangeRate = 0.5; 
+    this.processChangeRate = 0.01; 
 
     // The dBm fluctuation you see in your raw data
     // 2 - 10 based on '10dBm'
@@ -233,6 +337,13 @@ function processSignal(nodeId, rawRSSI) {
   return cleanRSSI;
 }
 
-// UI: Generate Sand Particles
+// Calibration Logic
+function calculateDistance(rssi) {
+    // Check for null or if n_factor is invalid (0 or negative)
+    if (rssiAt1m === null || n_factor <= 0) return -1;
 
-createSandParticles(50);
+    const exponent = (rssiAt1m - rssi) / (10 * n_factor);
+    return Math.pow(10, exponent);
+}
+
+// Trilateration Logic
