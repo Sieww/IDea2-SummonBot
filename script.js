@@ -13,8 +13,8 @@ let state = "idle";
 let sampling = false; // prevents double sampling
 
 /* ENV BUTTONS */
-btn1m.addEventListener("click", () => selectEnvironment(1));
-btn3m.addEventListener("click", () => selectEnvironment(3));
+btn1m.addEventListener("click", async() => await selectEnvironment(1));
+btn3m.addEventListener("click", async() => await selectEnvironment(3));
 
 // ESP32 IDs
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -37,8 +37,6 @@ const calibrationDuration = 4000;
 
 async function selectEnvironment(distance) {
 
-    if (state !== "idle" || sampling) return;
-
     // If not connected, trigger the pairing popup
     if (!device) {
         try {
@@ -48,6 +46,8 @@ async function selectEnvironment(distance) {
             return; // Exit if user cancels the Bluetooth popup
         }
     }
+
+    if (state !== "idle" || sampling) return;
 
     calibrationBuffer = []; // reset just in case (already resetting at finalize)
 
