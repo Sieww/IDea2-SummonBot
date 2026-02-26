@@ -314,7 +314,7 @@ function handleNotification(event) {
 class RSSIKalmanFilter {
   constructor(initialRSSI = -60) {
     // Expected movement speed of user (0.01 = slow/stable, 0.1 = fast movement)
-    this.processChangeRate = 0.3; 
+    this.processChangeRate = 0.1; 
 
     // The dBm fluctuation you see in your raw data
     // 2 - 10 based on '10dBm'
