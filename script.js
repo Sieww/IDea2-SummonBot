@@ -159,6 +159,12 @@ recalibrateBtn.addEventListener("click", () => {
     progressText.innerText = "Calibration Progress: 0 / 2";
     summonBtn.disabled = true;
     statusText.innerText = "Calibration reset. Select both environments.";
+
+    n_factor = null;
+    rssiAt1m = null;
+    rssiAt3m = null; 
+    console.log(`n factor: ${n_factor} | 1m rssi: ${rssiAt1m} | 3m rssi: ${rssiAt3m}`);
+
 });
 
 /* SUMMON BUTTON */
@@ -226,7 +232,8 @@ function lockEnvironment(lock) {
     // btn1m.disabled = lock;
     // btn3m.disabled = lock;
     // recalibrateBtn.disabled = lock;
-    console.log(`locking env. placeholder. set to: ${lock}`);
+
+    console.log(`environment lock set to: ${lock}`);
 }
 
 // ======= Functions specific to BLE trilateration subsystem =====================
@@ -311,7 +318,7 @@ class RSSIKalmanFilter {
     // The dBm fluctuation you see in your raw data
     // 2 - 10 based on '10dBm'
     this.measurementNoise = 5.0; 
- 
+
     this.currentEstimate = initialRSSI; 
     this.errorCovariance = 1.0; // filter's uncertainty
   }
@@ -352,12 +359,10 @@ function processSignal(nodeId, rawRSSI) {
 // Calibration Logic
 function calculateDistance(rssi) {
     // Check for null or if n_factor is invalid (0 or negative)
-    if (rssiAt1m === null || n_factor <= 0) return -1;
+    if (rssiAt1m === null || n_factor <= 0 || n_factor == null) return -1;
 
     const exponent = (rssiAt1m - rssi) / (10 * n_factor);
     return Math.pow(10, exponent);
 }
 
 // Trilateration Logic
-
-
