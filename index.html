@@ -4,198 +4,91 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beach SummonBot</title>
-
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
-
 <style>
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Poppins', sans-serif;
+/* ===== Base ===== */
+* { margin:0; padding:0; box-sizing:border-box; font-family:'Poppins',sans-serif; }
+
+body { 
+    height:100vh; display:flex; justify-content:center; align-items:center; 
+    background: linear-gradient(to bottom, #a3d5ff 0%, #88c9d0 50%, #fbe8c6 100%);
+    color: #333; overflow: hidden;
 }
 
-body {
-    height: 100vh;
-    background: linear-gradient(to bottom, #00c6ff, #0072ff 40%, #fdd79a 80%, #f7c873);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    overflow: hidden;
+.container { 
+    width:95%; max-width:420px; padding:30px; border-radius:25px; 
+    backdrop-filter: blur(15px); background: rgba(255,255,255,0.15); 
+    border:1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 40px rgba(0,0,0,0.15); 
+    text-align:center; 
+    transition: 0.3s all ease;
 }
 
-.container {
-    width: 95%;
-    max-width: 420px;
-    padding: 25px;
-    border-radius: 20px;
-    backdrop-filter: blur(15px);
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.3);
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    text-align: center;
-}
+h2 { font-weight:700; margin-bottom:20px; font-size:1.8rem; color:#2b3a67; }
+.status { font-size:14px; margin-bottom:20px; line-height:1.5; color: #2b3a67; }
 
-h1 {
-    font-size: 26px;
-    font-weight: 700;
-    margin-bottom: 10px;
+/* ===== Map ===== */
+.map { 
+    position:relative; height:220px; border-radius:20px; 
+    background: linear-gradient(to bottom, #b3e5fc 0%, #c8f0e3 60%, #fceacc 100%);
+    margin-bottom:25px; overflow:hidden; box-shadow: inset 0 0 15px rgba(255,255,255,0.25);
+    border: 2px solid rgba(255,255,255,0.15);
 }
+.base, .bot, .user { position:absolute; width:28px; height:28px; border-radius:50%; }
+.base { bottom:15px; left:15px; background:#ffd580; box-shadow: 0 0 10px #ffd58066; }
+.bot { bottom:15px; left:15px; background:#ffffff; box-shadow: 0 0 20px #ffffff55; transition: transform 2s ease-in-out; }
+.user { top:20px; right:20px; background:#ff9fb3; box-shadow: 0 0 15px #ff9fb366; }
 
-.status {
-    font-size: 14px;
-    opacity: 0.9;
-    margin-bottom: 20px;
-}
+/* ===== Calibration ===== */
+.env-header { font-size:15px; font-weight:600; margin-bottom:12px; color:#2b3a67; text-align:left; }
+.env-buttons { display:flex; gap:12px; margin-bottom:15px; }
+.env-buttons button { flex:1; padding:12px; border-radius:30px; border:none; font-weight:600; cursor:pointer; 
+    background: linear-gradient(135deg,#ffd9a6,#ffbfa3); color:#2b3a67; transition:0.25s; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
+.env-buttons button:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
+.env-buttons button.active { box-shadow: 0 0 15px #ffffff55, 0 0 25px #ffffff33; }
 
-/* Map */
-.map {
-    position: relative;
-    height: 200px;
-    border-radius: 15px;
-    background: linear-gradient(to bottom, #0093E9, #80D0C7);
-    overflow: hidden;
-    margin-bottom: 20px;
-}
+/* ===== Action Buttons ===== */
+button { width:100%; padding:14px; border-radius:35px; border:none; font-weight:600; cursor:pointer; 
+    background: linear-gradient(135deg,#ffd9a6,#ffbfa3); color:#2b3a67; margin-top:14px; transition:0.25s; 
+    box-shadow: 0 5px 12px rgba(0,0,0,0.1);}
+button:hover:not(:disabled) { transform: scale(1.04); background: linear-gradient(135deg,#ffe0b0,#ffc9b0); }
+button:disabled { opacity:0.6; cursor:not-allowed; }
 
-/* Base */
-.base {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    width: 25px;
-    height: 25px;
-    background: #ffcc70;
-    border-radius: 50%;
-    box-shadow: 0 0 15px #ffcc70;
-}
+/* ===== Progress ===== */
+.progress { font-size:13px; margin-bottom:12px; color:#2b3a67; text-align:left; background: rgba(255,255,255,0.2); 
+    padding:6px 12px; border-radius:20px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
 
-/* User */
-.user {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    width: 25px;
-    height: 25px;
-    background: #ff6ec7;
-    border-radius: 50%;
-    box-shadow: 0 0 15px #ff6ec7;
-}
-
-/* Bot */
-.bot {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    width: 25px;
-    height: 25px;
-    background: #ffffff;
-    border-radius: 50%;
-    box-shadow: 0 0 20px #ffffff;
-    transition: transform 3s ease-in-out;
-}
-
-/* Buttons */
-button {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 30px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    background: linear-gradient(45deg, #ff9966, #ff5e62);
-    color: white;
-    margin-top: 8px;
-    transition: 0.3s ease;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-}
-
-button:hover {
-    transform: scale(1.05);
-}
-
-input {
-    width: 100%;
-    padding: 10px;
-    border-radius: 20px;
-    border: none;
-    text-align: center;
-    margin-top: 12px;
-    font-size: 14px;
-}
-
-/* Calibration Status Colors */
-.calibrate-status {
-    font-size: 12px;
-    margin-top: 8px;
-    font-weight: 600;
-}
-
-.error { color: #ff4d4d; }
-.success { color: #4CAF50; }
-.warning { color: #ff4d4d; }
-
-/* Sand */
-.sand {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-.sand-particle {
-    position: absolute;
-    width: 3px;
-    height: 3px;
-    background: rgba(255, 230, 180, 0.8);
-    border-radius: 50%;
-    opacity: 0.8;
-    animation: float 5s linear infinite;
-}
-
-@keyframes float {
-    0% { transform: translateY(0px) translateX(0px); opacity: 0.8; }
-    50% { opacity: 0.3; }
-    100% { transform: translateY(-200px) translateX(50px); opacity: 0; }
-}
-
-.footer {
-    font-size: 11px;
-    margin-top: 15px;
-    opacity: 0.7;
-    color: black;
-}
+/* ===== Footer ===== */
+.footer { font-size:11px; margin-top:18px; opacity:0.7; color:#2b3a67; text-align:center;}
 </style>
 </head>
 
 <body>
-
 <div class="container">
-    <h1>SummonBot</h1>
-    <div class="status" id="status">Status: Awaiting command</div>
+    <h2>Beach SummonBot</h2>
+    <div class="status" id="status">
+        Welcome! Before we can send the bot, let's do a quick calibration for both near and far distances.
+    </div>
 
     <div class="map">
-        <div class="base"></div>
-        <div class="user"></div>
-        <div class="bot" id="bot"></div>
-        <div class="sand"></div>
+        <div class="base" title="Base"></div>
+        <div class="bot" id="bot" title="SummonBot"></div>
+        <div class="user" title="You"></div>
     </div>
 
-    <button id="actionBtn">SUMMON</button>
-
-    <input type="number" id="distanceInput" placeholder="Enter distance (meters)">
-    <button id="calibrateBtn">CALIBRATE DISTANCE</button>
-    <div id="calibrateStatus" class="calibrate-status"></div>
-
-    <div class="footer">
-        Coastal Autonomous Service System
+    <div class="env-header">Calibration Step</div>
+    <div class="env-buttons">
+        <button id="btn1m">1 meter</button>
+        <button id="btn3m">3 meters</button>
     </div>
+
+    <div id="progressText" class="progress">Calibrated: 0 / 2</div>
+
+    <button id="recalibrateBtn">Reset Calibration</button>
+    <button id="actionBtn" disabled>Summon Bot</button>
+
+    <div class="footer">Coastal Autonomous Service System</div>
 </div>
 
 <script src="script.js"></script>
-
 </body>
 </html>
