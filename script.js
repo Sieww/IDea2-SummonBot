@@ -46,121 +46,209 @@ let coordBuffer = [];
 const smoothingFactor = 10;
 let stableCoords = {x: 0, y: 0};
 
-async function selectEnvironment(distance) {
+// async function selectEnvironment(distance) {
 
-    // If not connected, trigger the pairing popup
+//     // If not connected, trigger the pairing popup
+//     if (!device) {
+//         try {
+//             await connectBluetooth();
+//             await new Promise(res => setTimeout(res, 500));
+//         } catch (err) {
+//             statusText.innerText = "Connection required to calibrate.";
+//             return; // Exit if user cancels the Bluetooth popup
+//         }
+//     }
+
+//     if (state !== "idle" || sampling) return;
+
+//     const button = distance === 1 ? btn1m : btn3m;
+
+//     sampling = true;
+//     button.disabled = true;
+//     statusText.innerText = `Calibrating ${distance}m environment...`;
+
+//     const duration = calibrationDuration;
+//     let start = null;
+
+//     // Create progress overlay
+//     const progressOverlay = document.createElement("div");
+//     progressOverlay.style.position = "absolute";
+//     progressOverlay.style.left = "0";
+//     progressOverlay.style.top = "0";
+//     progressOverlay.style.height = "100%";
+//     progressOverlay.style.width = "0%";
+//     progressOverlay.style.borderRadius = "30px";
+//     progressOverlay.style.background = "rgba(255,255,255,0.4)";
+//     progressOverlay.style.transition = "width 0.05s linear";
+
+//     button.style.position = "relative";
+//     button.style.overflow = "hidden";
+//     button.appendChild(progressOverlay);
+
+//     function animate(timestamp) {
+//         if (!start) start = timestamp;
+//         let elapsed = timestamp - start;
+//         let percent = Math.min((elapsed / duration) * 100, 100);
+//         progressOverlay.style.width = percent + "%";
+
+//         if (elapsed < duration) {
+//             requestAnimationFrame(animate);
+//         } else {
+//             button.removeChild(progressOverlay);
+//             finalizeCalibration(distance);
+//         }
+//     }
+
+//     requestAnimationFrame(animate);
+// }
+
+// function finalizeCalibration(distance) {
+//     // If temp array empty, show failed
+//     if (calibrationBuffer.length === 0) {
+//         console.error("No signal detected! Calibration failed. Please try again.");
+//         sampling = false;
+//         button.disabled = false; 
+//         return;
+//     }
+    
+//     // calculate average of signals, save to respective vars
+//     const averageRSSI = calibrationBuffer.reduce((a, b) => a + b, 0) / calibrationBuffer.length;
+
+//     if (distance === 1) {
+//         rssiAt1m = averageRSSI; // We now have 'A'
+//         console.log(`[CALIBRATION] 1m Baseline (A) set to: ${rssiAt1m.toFixed(2)}`);
+//     } 
+//     else if (distance === 3) {
+//         rssiAt3m = averageRSSI;
+//         console.log(`[CALIBRATION] 3m Reference set to: ${rssiAt3m.toFixed(2)}`);
+//     }
+    
+
+//     // Calculate Path Loss Exponent (n) only if both are done
+//     if (rssiAt1m !== null && rssiAt3m !== null) {
+//         /* Formula for n: (RSSI_1m - RSSI_3m) / (10 * log10(d2/d1))
+//            Since d2=3 and d1=1: 10 * log10(3) = 4.771
+//         */
+//         n_factor = (rssiAt1m - rssiAt3m) / 4.771;
+        
+//         // Sanity check: n is usually between 1.5 and 4.5
+//         if (n_factor < 2.0) {
+//             n_factor = 2.0;
+//             console.warn("Calculated n was too low (" + n_factor.toFixed(2) + "). Forcing n = 2.0");        
+//         }
+        
+//         console.log(`[CALIBRATION] Calculated Path Loss Exponent (n): ${n_factor.toFixed(2)}`);
+//     }
+
+//     // UI handling
+//     calibratedEnvs.add(distance);
+
+//     btn1m.classList.toggle("active", calibratedEnvs.has(1));
+//     btn3m.classList.toggle("active", calibratedEnvs.has(3));
+
+//     progressText.innerText = `Calibration Progress: ${calibratedEnvs.size} / 2`;
+
+//     if (calibratedEnvs.size === 2) {
+//         summonBtn.disabled = false;
+//         statusText.innerText = "System calibrated. Ready for deployment.";
+//         travelTime = 3;
+//     } else {
+//         statusText.innerText = "Calibration in progress...";
+//     }
+
+//     sampling = false;
+//     const button = distance === 1 ? btn1m : btn3m;
+//     button.disabled = false;
+
+//     calibrationBuffer = [];
+// }
+
+async function selectEnvironment(distance) {
     if (!device) {
         try {
             await connectBluetooth();
-            await new Promise(res => setTimeout(res, 500));
+            // Give the BLE stack a moment to breathe
+            await new Promise(r => setTimeout(r, 600)); 
         } catch (err) {
-            statusText.innerText = "Connection required to calibrate.";
-            return; // Exit if user cancels the Bluetooth popup
+            statusText.innerText = "Connection required.";
+            return;
         }
     }
 
     if (state !== "idle" || sampling) return;
 
+    // RESET EVERYTHING BEFORE STARTING
+    calibrationBuffer = []; 
+    sampling = true; 
+
     const button = distance === 1 ? btn1m : btn3m;
-
-    sampling = true;
     button.disabled = true;
-    statusText.innerText = `Calibrating ${distance}m environment...`;
+    statusText.innerText = `Calibrating ${distance}m...`;
 
-    const duration = calibrationDuration;
     let start = null;
-
-    // Create progress overlay
-    const progressOverlay = document.createElement("div");
-    progressOverlay.style.position = "absolute";
-    progressOverlay.style.left = "0";
-    progressOverlay.style.top = "0";
-    progressOverlay.style.height = "100%";
-    progressOverlay.style.width = "0%";
-    progressOverlay.style.borderRadius = "30px";
-    progressOverlay.style.background = "rgba(255,255,255,0.4)";
-    progressOverlay.style.transition = "width 0.05s linear";
-
-    button.style.position = "relative";
-    button.style.overflow = "hidden";
-    button.appendChild(progressOverlay);
+    const duration = calibrationDuration;
 
     function animate(timestamp) {
         if (!start) start = timestamp;
         let elapsed = timestamp - start;
         let percent = Math.min((elapsed / duration) * 100, 100);
-        progressOverlay.style.width = percent + "%";
-
+        
+        // If you have a progress bar element, update it here
+        
         if (elapsed < duration) {
             requestAnimationFrame(animate);
         } else {
-            button.removeChild(progressOverlay);
+            // End of timer
             finalizeCalibration(distance);
         }
     }
-
     requestAnimationFrame(animate);
 }
 
 function finalizeCalibration(distance) {
-    // If temp array empty, show failed
+    // 1. STOP SAMPLING IMMEDIATELY
+    sampling = false;
+
+    // 2. DEFINE BUTTON AT THE START (Fixes your ReferenceError)
+    const button = distance === 1 ? btn1m : btn3m;
+    button.disabled = false;
+
+    console.log("Finalizing... Buffer count:", calibrationBuffer.length);
+
+    // 3. CHECK BUFFER
     if (calibrationBuffer.length === 0) {
-        console.error("No signal detected! Calibration failed. Please try again.");
-        sampling = false;
-        button.disabled = false; 
+        statusText.innerText = "Error: No signal from Node 0!";
+        console.error("Calibration failed: Buffer is empty.");
         return;
     }
     
-    // calculate average of signals, save to respective vars
     const averageRSSI = calibrationBuffer.reduce((a, b) => a + b, 0) / calibrationBuffer.length;
 
     if (distance === 1) {
-        rssiAt1m = averageRSSI; // We now have 'A'
-        console.log(`[CALIBRATION] 1m Baseline (A) set to: ${rssiAt1m.toFixed(2)}`);
-    } 
-    else if (distance === 3) {
+        rssiAt1m = averageRSSI;
+        console.log(`[CALIBRATION] 1m set: ${rssiAt1m.toFixed(2)}`);
+    } else {
         rssiAt3m = averageRSSI;
-        console.log(`[CALIBRATION] 3m Reference set to: ${rssiAt3m.toFixed(2)}`);
+        console.log(`[CALIBRATION] 3m set: ${rssiAt3m.toFixed(2)}`);
     }
-    
 
-    // Calculate Path Loss Exponent (n) only if both are done
+    // Calculate N-Factor if both exist
     if (rssiAt1m !== null && rssiAt3m !== null) {
-        /* Formula for n: (RSSI_1m - RSSI_3m) / (10 * log10(d2/d1))
-           Since d2=3 and d1=1: 10 * log10(3) = 4.771
-        */
         n_factor = (rssiAt1m - rssiAt3m) / 4.771;
-        
-        // Sanity check: n is usually between 1.5 and 4.5
-        if (n_factor < 2.0) {
-            n_factor = 2.0;
-            console.warn("Calculated n was too low (" + n_factor.toFixed(2) + "). Forcing n = 2.0");        
-        }
-        
-        console.log(`[CALIBRATION] Calculated Path Loss Exponent (n): ${n_factor.toFixed(2)}`);
+        if (n_factor < 2.0) n_factor = 2.0; 
+        console.log(`[CALIBRATION] New n_factor: ${n_factor.toFixed(2)}`);
     }
 
-    // UI handling
     calibratedEnvs.add(distance);
-
     btn1m.classList.toggle("active", calibratedEnvs.has(1));
     btn3m.classList.toggle("active", calibratedEnvs.has(3));
-
+    
     progressText.innerText = `Calibration Progress: ${calibratedEnvs.size} / 2`;
 
     if (calibratedEnvs.size === 2) {
         summonBtn.disabled = false;
-        statusText.innerText = "System calibrated. Ready for deployment.";
-        travelTime = 3;
-    } else {
-        statusText.innerText = "Calibration in progress...";
+        statusText.innerText = "Ready!";
     }
-
-    sampling = false;
-    const button = distance === 1 ? btn1m : btn3m;
-    button.disabled = false;
-
-    calibrationBuffer = [];
 }
 
 /* RECALIBRATE BUTTON */
