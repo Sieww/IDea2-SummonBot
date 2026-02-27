@@ -42,6 +42,9 @@ const snifferAnchors = {
     2: { x: 2.5, y: 4.33 }  // Sniffer 2 forming a triangle
 };
 const latestDistances = { "0": null, "1": null, "2": null };
+let coordBuffer = [];
+const smoothingFactor = 10;
+let stableCoords = {x: 0, y: 0};
 
 async function selectEnvironment(distance) {
 
@@ -56,6 +59,8 @@ async function selectEnvironment(distance) {
     }
 
     if (state !== "idle" || sampling) return;
+
+    sleep(5000);
 
     calibrationBuffer = []; // reset just in case (already resetting at finalize)
 
@@ -191,6 +196,12 @@ summonBtn.addEventListener("click", async () => {
 });
 
 function summonBot() {
+
+    if (coordBuffer.length < 1) {
+        statusText.innerText = "Error: No location data received yet.";
+        return;
+    }
+
     state = "going";
     lockEnvironment(true);
     summonBtn.disabled = true;
@@ -201,11 +212,15 @@ function summonBot() {
     // PHYSICAL SIGNAL
     sendBleSignal(1); // Send '1' to start moving
 
+    // Use the averaged stable coordinates
+    const targetX = stableCoords.x;
+    const targetY = stableCoords.y;
+
     setTimeout(() => {
         state = "arrived";
         summonBtn.disabled = false;
         summonBtn.innerText = "RETURN TO BASE";
-        statusText.innerText = "Bot arrived.";
+        statusText.innerText = `Bot arrived at (${targetX.toFixed(2)}m, ${targetY.toFixed(2)}m)`;
 
         // PHYSICAL SIGNAL
         sendBleSignal(0); // Send '0' to stop
@@ -327,14 +342,22 @@ function handleNotification(event) {
 
             // trilaterate if have distances from all 3 nodes
             if (latestDistances["0"] && latestDistances["1"] && latestDistances["2"]) {
-                const coords = trilaterate(
+                const rawCoords = trilaterate(
                     latestDistances["0"], 
                     latestDistances["1"], 
                     latestDistances["2"]
                 );
 
-                if (coords) {
-                    console.log(`Current coords: (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
+                if (rawCoords) {
+                    // 1. Add raw math result to Rolling Buffer (Prevents Teleporting)
+                    coordBuffer.push({ x: rawCoords.x, y: rawCoords.y });
+                    if (coordBuffer.length > smoothingFactor) coordBuffer.shift();
+
+                    // 2. Update the background "Stable Target"
+                    stableCoords.x = coordBuffer.reduce((sum, p) => sum + p.x, 0) / coordBuffer.length;
+                    stableCoords.y = coordBuffer.reduce((sum, p) => sum + p.y, 0) / coordBuffer.length;
+
+                    console.log(`Current coords (averaged): (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
                 }
             }
             
@@ -404,7 +427,11 @@ function calculateDistance(rssi) {
 function calculateFloorDistance(distance)
 {
     if(distance === null || distance < 0) return -1;
-    return Math.sqrt(distance**2 - userHeight**2);
+
+    // If the reported distance is smaller than the height of the phone,
+    // assume the floor distance = 0 to avoid square rooting a negative.
+    const diff = distance**2 - userHeight**2;
+    return diff > 0? Math.sqrt(diff) : 0;
 }
 
 function trilaterate(d0, d1, d2) 
@@ -430,5 +457,10 @@ function trilaterate(d0, d1, d2)
     const y = (A * F - D * C) / denominator;
 
     return { x, y };
+
 }
 
+// Other
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
