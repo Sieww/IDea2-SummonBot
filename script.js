@@ -43,20 +43,6 @@ const snifferAnchors = {
 };
 const latestDistances = { "0": null, "1": null, "2": null };
 
-// Trigger Bluetooth Pairing on Load
-document.addEventListener('DOMContentLoaded', async(event) => {
-    // Your JavaScript code to run after the DOM is ready
-    console.log("DOM fully loaded and parsed");
-
-    while (!device) {
-        try {
-            await connectBluetooth();
-        } catch (err) {
-            statusText.innerText = "Connection required.";
-        }
-    }
-  });
-
 async function selectEnvironment(distance) {
 
     // If not connected, trigger the pairing popup
@@ -445,3 +431,4 @@ function trilaterate(d0, d1, d2)
 
     return { x, y };
 }
+
