@@ -506,39 +506,49 @@ async function sendBleSignal(value) {
 
 function handleNotification(event) {
     const decoder = new TextDecoder();
-    const rawValue = decoder.decode(event.target.value);
-    const cleanValue = rawValue.trim();
+    const rawValue = decoder.decode(event.target.value).trim();
+    
+    let id = null;
+    let rawRssi = NaN;
 
-    // REGEX: Looks for "Node" followed by a number, and "RSSI" followed by a number
-    const idMatch = cleanValue.match(/Node\s*(\d+)/i);
-    const rssiMatch = cleanValue.match(/RSSI:\s*(-?\d+)/i);
+    // 1. Try parsing the simple "0:-70" format seen in your console
+    if (rawValue.includes(":")) {
+        const parts = rawValue.split(":");
+        // If there's more than one colon (like "Node 0 | RSSI: -70"), 
+        // we handle that by taking the last part as RSSI
+        if (parts.length === 2) {
+            id = parts[0].trim();
+            rawRssi = parseInt(parts[1]);
+        } else {
+            // Backup: Try regex if it's the more complex string
+            const idMatch = rawValue.match(/Node\s*(\d+)/i);
+            const rssiMatch = rawValue.match(/RSSI:\s*(-?\d+)/i);
+            if (idMatch) id = idMatch[1];
+            if (rssiMatch) rawRssi = parseInt(rssiMatch[1]);
+        }
+    }
 
-    if (idMatch && rssiMatch) {
-        const id = idMatch[1]; // Just the number "0", "1", etc.
-        const rawRssi = parseInt(rssiMatch[1]);
+    // 2. If we successfully found an ID and a valid RSSI number
+    if (id !== null && !isNaN(rawRssi)) {
+        const filteredRssi = processSignal(id, rawRssi);    
+        
+        // Calibration Logic (Node 0)
+        if (sampling && id === "0") {
+            calibrationBuffer.push(filteredRssi);
+            console.log(`✅ MATCH! Node ${id} added to buffer. Count: ${calibrationBuffer.length}`);
+        }
 
-        if (!isNaN(rawRssi)) {
-            const filteredRssi = processSignal(id, rawRssi);    
+        // Live Tracking Logic
+        if (calibratedEnvs.size === 2) {
+            const distance = calculateDistance(filteredRssi);
+            const floorDistance = calculateFloorDistance(distance);
+            latestDistances[id] = floorDistance;
             
-            // 1. Calibration (Specifically for Node 0)
-            if (sampling && id === "0") {
-                calibrationBuffer.push(filteredRssi);
-                console.log(`✅ BUFFERED: Node ${id} | RSSI: ${filteredRssi.toFixed(2)} | Count: ${calibrationBuffer.length}`);
-            }
-
-            // 2. Tracking (Runs after calibration is complete)
-            if (calibratedEnvs.size === 2) {
-                const distance = calculateDistance(filteredRssi);
-                const floorDistance = calculateFloorDistance(distance);
-                latestDistances[id] = floorDistance;
-                
-                console.log(`📡 Node ${id} -> ${floorDistance.toFixed(2)}m`);
-                checkAndTrilaterate();
-            }
+            console.log(`📡 Tracking Node ${id}: ${floorDistance.toFixed(2)}m`);
+            checkAndTrilaterate();
         }
     } else {
-        // If this logs, the string format from the ESP32 doesn't match
-        console.log("Raw Data Mismatch:", cleanValue);
+        console.log("⚠️ Still can't parse this string:", rawValue);
     }
 }
 
