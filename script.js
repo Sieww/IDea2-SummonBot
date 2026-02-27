@@ -52,6 +52,7 @@ async function selectEnvironment(distance) {
     if (!device) {
         try {
             await connectBluetooth();
+            await new Promise(res => setTimeout(res, 500));
         } catch (err) {
             statusText.innerText = "Connection required to calibrate.";
             return; // Exit if user cancels the Bluetooth popup
@@ -59,8 +60,6 @@ async function selectEnvironment(distance) {
     }
 
     if (state !== "idle" || sampling) return;
-
-    sleep(5000);
 
     const button = distance === 1 ? btn1m : btn3m;
 
@@ -267,7 +266,7 @@ async function connectBluetooth() {
     try {
         statusText.innerText = "Status: Pairing Bluetooth...";
         device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'Summon' }], // Finds any device starting with "ESP32"
+            filters: [{ namePrefix: 'Summon' }], 
             optionalServices: [SERVICE_UUID]
         });
 
@@ -318,11 +317,14 @@ function handleNotification(event) {
     if (value.includes(":")) {
         const [id, rssiStr] = value.split(":");
         const rawRssi = parseInt(rssiStr);
+        // Safety: If parsing fails, ignore the packet
+        if (isNaN(rawRssi)) return;
         const filteredRssi = processSignal(id, rawRssi);    
         
         // if sampling for calibration, add to the calibration buffer list ONLY FROM NODE 0
-        if (sampling && id === "0") {
+        if (sampling && id.trim() === "0") {
             calibrationBuffer.push(filteredRssi);
+            console.log(`Buffer Size: ${calibrationBuffer.length} | Value: ${filteredRssi}`);
             console.log(`Calibrating with Node 0... Current: ${filteredRssi.toFixed(2)}`);
         }
 
