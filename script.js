@@ -62,8 +62,6 @@ async function selectEnvironment(distance) {
 
     sleep(5000);
 
-    calibrationBuffer = []; // reset just in case (already resetting at finalize)
-
     const button = distance === 1 ? btn1m : btn3m;
 
     sampling = true;
