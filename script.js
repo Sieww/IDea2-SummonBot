@@ -396,64 +396,123 @@ async function sendBleSignal(value) {
     }
 }
 
+// function handleNotification(event) {
+//     const decoder = new TextDecoder();
+//     const value = decoder.decode(event.target.value);
+
+//     // ID + RSSI Parsing (assuming format "ID:RSSI")
+//     if (value.includes(":")) {
+//         const [id, rssiStr] = value.split(":");
+//         const rawRssi = parseInt(rssiStr);
+
+//         // Safety: If parsing fails, ignore the packet
+//         if (isNaN(rawRssi)) return;
+        
+//         const filteredRssi = processSignal(id, rawRssi);    
+        
+//         // if sampling for calibration, add to the calibration buffer list ONLY FROM NODE 0
+//         if (sampling && id.includes("0")) {
+//             calibrationBuffer.push(filteredRssi);
+//             // This is your lifeline: if you see this in the console, it's working
+//             console.log(`✅ Buffer Fill: ${calibrationBuffer.length} samples`);
+//         }
+
+//         // If system is calibrated, 
+//         if (calibratedEnvs.size === 2) {
+//             // calculate and show real distance for ALL 3 NODES
+//             const distance = calculateDistance(filteredRssi);
+            
+//             // calculate actual floor distance (since user's phone will be off the ground)
+//             const floorDistance = calculateFloorDistance(distance);
+//             console.log(`Node ${id}: ${distance.toFixed(2)}m away | Floor dist: ${floorDistance.toFixed(2)}m away`);
+
+//             // update distances from all 3 nodes into an array for trilateration
+//             latestDistances[id] = floorDistance;
+
+//             // trilaterate if have distances from all 3 nodes
+//             if (latestDistances["0"] && latestDistances["1"] && latestDistances["2"]) {
+//                 const rawCoords = trilaterate(
+//                     latestDistances["0"], 
+//                     latestDistances["1"], 
+//                     latestDistances["2"]
+//                 );
+
+//                 if (rawCoords) {
+//                     // 1. Add raw math result to Rolling Buffer (Prevents Teleporting)
+//                     coordBuffer.push({ x: rawCoords.x, y: rawCoords.y });
+//                     if (coordBuffer.length > smoothingFactor) coordBuffer.shift();
+
+//                     // 2. Update the background "Stable Target"
+//                     stableCoords.x = coordBuffer.reduce((sum, p) => sum + p.x, 0) / coordBuffer.length;
+//                     stableCoords.y = coordBuffer.reduce((sum, p) => sum + p.y, 0) / coordBuffer.length;
+
+//                     console.log(`Current coords (averaged): (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
+//                 }
+//             }
+            
+//             else { console.log("Failed to trilaterate due to missing value(s)."); }
+//         }
+//     }
+
+// }
+
 function handleNotification(event) {
     const decoder = new TextDecoder();
-    const value = decoder.decode(event.target.value);
+    const rawValue = decoder.decode(event.target.value);
+    
+    // Clean string: "Node 0 | RSSI: -70"
+    const cleanValue = rawValue.trim();
 
-    // ID + RSSI Parsing (assuming format "ID:RSSI")
-    if (value.includes(":")) {
-        const [id, rssiStr] = value.split(":");
-        const rawRssi = parseInt(rssiStr);
-
-        // Safety: If parsing fails, ignore the packet
-        if (isNaN(rawRssi)) return;
-        
-        const filteredRssi = processSignal(id, rawRssi);    
-        
-        // if sampling for calibration, add to the calibration buffer list ONLY FROM NODE 0
-        if (sampling && id.includes("0")) {
-            calibrationBuffer.push(filteredRssi);
-            // This is your lifeline: if you see this in the console, it's working
-            console.log(`✅ Buffer Fill: ${calibrationBuffer.length} samples`);
-        }
-
-        // If system is calibrated, 
-        if (calibratedEnvs.size === 2) {
-            // calculate and show real distance for ALL 3 NODES
-            const distance = calculateDistance(filteredRssi);
+    // Check if the string contains our key markers
+    if (cleanValue.includes("Node") && cleanValue.includes("RSSI:")) {
+        try {
+            // Split by '|' first: ["Node 0 ", " RSSI: -70"]
+            const sections = cleanValue.split("|");
             
-            // calculate actual floor distance (since user's phone will be off the ground)
-            const floorDistance = calculateFloorDistance(distance);
-            console.log(`Node ${id}: ${distance.toFixed(2)}m away | Floor dist: ${floorDistance.toFixed(2)}m away`);
+            // Extract ID: Get the number after "Node"
+            const idMatch = sections[0].match(/\d+/);
+            const id = idMatch ? idMatch[0] : null;
 
-            // update distances from all 3 nodes into an array for trilateration
-            latestDistances[id] = floorDistance;
+            // Extract RSSI: Get the number after "RSSI:"
+            const rssiMatch = sections[1].match(/-?\d+/);
+            const rawRssi = rssiMatch ? parseInt(rssiMatch[0]) : NaN;
 
-            // trilaterate if have distances from all 3 nodes
-            if (latestDistances["0"] && latestDistances["1"] && latestDistances["2"]) {
-                const rawCoords = trilaterate(
-                    latestDistances["0"], 
-                    latestDistances["1"], 
-                    latestDistances["2"]
-                );
+            if (id !== null && !isNaN(rawRssi)) {
+                const filteredRssi = processSignal(id, rawRssi);    
+                
+                // 1. Calibration (Node 0)
+                if (sampling && id === "0") {
+                    calibrationBuffer.push(filteredRssi);
+                    console.log(`✅ Buffered Node 0: ${filteredRssi} (Count: ${calibrationBuffer.length})`);
+                }
 
-                if (rawCoords) {
-                    // 1. Add raw math result to Rolling Buffer (Prevents Teleporting)
-                    coordBuffer.push({ x: rawCoords.x, y: rawCoords.y });
-                    if (coordBuffer.length > smoothingFactor) coordBuffer.shift();
-
-                    // 2. Update the background "Stable Target"
-                    stableCoords.x = coordBuffer.reduce((sum, p) => sum + p.x, 0) / coordBuffer.length;
-                    stableCoords.y = coordBuffer.reduce((sum, p) => sum + p.y, 0) / coordBuffer.length;
-
-                    console.log(`Current coords (averaged): (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
+                // 2. Real-time Tracking (Nodes 0, 1, 2)
+                if (calibratedEnvs.size === 2) {
+                    const distance = calculateDistance(filteredRssi);
+                    const floorDistance = calculateFloorDistance(distance);
+                    latestDistances[id] = floorDistance;
+                    
+                    console.log(`📡 Node ${id} Signal: ${floorDistance.toFixed(2)}m`);
+                    
+                    // Trigger trilateration if all nodes are present
+                    checkAndTrilaterate();
                 }
             }
-            
-            else { console.log("Failed to trilaterate due to missing value(s)."); }
+        } catch (e) {
+            console.warn("Parsing error on string:", cleanValue);
         }
     }
+}
 
+// Helper to keep trilateration clean
+function checkAndTrilaterate() {
+    if (latestDistances["0"] !== null && latestDistances["1"] !== null && latestDistances["2"] !== null) {
+        const coords = trilaterate(latestDistances["0"], latestDistances["1"], latestDistances["2"]);
+        if (coords) {
+            // Update stableCoords and buffer...
+            console.log("📍 Position Calculated:", coords);
+        }
+    }
 }
 
 // Kalman Filter Logic
