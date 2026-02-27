@@ -164,6 +164,7 @@ let stableCoords = {x: 0, y: 0};
 // }
 
 async function selectEnvironment(distance) {
+    const button = distance === 1 ? btn1m : btn3m;
     if (!device) {
         try {
             await connectBluetooth();
@@ -181,7 +182,6 @@ async function selectEnvironment(distance) {
     calibrationBuffer = []; 
     sampling = true; 
 
-    const button = distance === 1 ? btn1m : btn3m;
     button.disabled = true;
     statusText.innerText = `Calibrating ${distance}m...`;
 
@@ -193,7 +193,6 @@ async function selectEnvironment(distance) {
         let elapsed = timestamp - start;
         let percent = Math.min((elapsed / duration) * 100, 100);
         
-        // If you have a progress bar element, update it here
         
         if (elapsed < duration) {
             requestAnimationFrame(animate);
@@ -405,15 +404,17 @@ function handleNotification(event) {
     if (value.includes(":")) {
         const [id, rssiStr] = value.split(":");
         const rawRssi = parseInt(rssiStr);
+
         // Safety: If parsing fails, ignore the packet
         if (isNaN(rawRssi)) return;
+        
         const filteredRssi = processSignal(id, rawRssi);    
         
         // if sampling for calibration, add to the calibration buffer list ONLY FROM NODE 0
-        if (sampling && id.trim() === "0") {
+        if (sampling && id.includes("0")) {
             calibrationBuffer.push(filteredRssi);
-            console.log(`Buffer Size: ${calibrationBuffer.length} | Value: ${filteredRssi}`);
-            console.log(`Calibrating with Node 0... Current: ${filteredRssi.toFixed(2)}`);
+            // This is your lifeline: if you see this in the console, it's working
+            console.log(`✅ Buffer Fill: ${calibrationBuffer.length} samples`);
         }
 
         // If system is calibrated, 
