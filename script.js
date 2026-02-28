@@ -41,127 +41,11 @@ const snifferAnchors = {
     1: { x: 5,   y: 0 },    // Sniffer 1 at 5m on X-axis
     2: { x: 2.5, y: 4.33 }  // Sniffer 2 forming a triangle
 };
+const baseCoords = {x : -1, y: -1}
 const latestDistances = { "0": null, "1": null, "2": null };
 let coordBuffer = [];
 const smoothingFactor = 10;
 let stableCoords = {x: 0, y: 0};
-
-// async function selectEnvironment(distance) {
-
-//     // If not connected, trigger the pairing popup
-//     if (!device) {
-//         try {
-//             await connectBluetooth();
-//             await new Promise(res => setTimeout(res, 500));
-//         } catch (err) {
-//             statusText.innerText = "Connection required to calibrate.";
-//             return; // Exit if user cancels the Bluetooth popup
-//         }
-//     }
-
-//     if (state !== "idle" || sampling) return;
-
-//     const button = distance === 1 ? btn1m : btn3m;
-
-//     sampling = true;
-//     button.disabled = true;
-//     statusText.innerText = `Calibrating ${distance}m environment...`;
-
-//     const duration = calibrationDuration;
-//     let start = null;
-
-//     // Create progress overlay
-//     const progressOverlay = document.createElement("div");
-//     progressOverlay.style.position = "absolute";
-//     progressOverlay.style.left = "0";
-//     progressOverlay.style.top = "0";
-//     progressOverlay.style.height = "100%";
-//     progressOverlay.style.width = "0%";
-//     progressOverlay.style.borderRadius = "30px";
-//     progressOverlay.style.background = "rgba(255,255,255,0.4)";
-//     progressOverlay.style.transition = "width 0.05s linear";
-
-//     button.style.position = "relative";
-//     button.style.overflow = "hidden";
-//     button.appendChild(progressOverlay);
-
-//     function animate(timestamp) {
-//         if (!start) start = timestamp;
-//         let elapsed = timestamp - start;
-//         let percent = Math.min((elapsed / duration) * 100, 100);
-//         progressOverlay.style.width = percent + "%";
-
-//         if (elapsed < duration) {
-//             requestAnimationFrame(animate);
-//         } else {
-//             button.removeChild(progressOverlay);
-//             finalizeCalibration(distance);
-//         }
-//     }
-
-//     requestAnimationFrame(animate);
-// }
-
-// function finalizeCalibration(distance) {
-//     // If temp array empty, show failed
-//     if (calibrationBuffer.length === 0) {
-//         console.error("No signal detected! Calibration failed. Please try again.");
-//         sampling = false;
-//         button.disabled = false; 
-//         return;
-//     }
-    
-//     // calculate average of signals, save to respective vars
-//     const averageRSSI = calibrationBuffer.reduce((a, b) => a + b, 0) / calibrationBuffer.length;
-
-//     if (distance === 1) {
-//         rssiAt1m = averageRSSI; // We now have 'A'
-//         console.log(`[CALIBRATION] 1m Baseline (A) set to: ${rssiAt1m.toFixed(2)}`);
-//     } 
-//     else if (distance === 3) {
-//         rssiAt3m = averageRSSI;
-//         console.log(`[CALIBRATION] 3m Reference set to: ${rssiAt3m.toFixed(2)}`);
-//     }
-    
-
-//     // Calculate Path Loss Exponent (n) only if both are done
-//     if (rssiAt1m !== null && rssiAt3m !== null) {
-//         /* Formula for n: (RSSI_1m - RSSI_3m) / (10 * log10(d2/d1))
-//            Since d2=3 and d1=1: 10 * log10(3) = 4.771
-//         */
-//         n_factor = (rssiAt1m - rssiAt3m) / 4.771;
-        
-//         // Sanity check: n is usually between 1.5 and 4.5
-//         if (n_factor < 2.0) {
-//             n_factor = 2.0;
-//             console.warn("Calculated n was too low (" + n_factor.toFixed(2) + "). Forcing n = 2.0");        
-//         }
-        
-//         console.log(`[CALIBRATION] Calculated Path Loss Exponent (n): ${n_factor.toFixed(2)}`);
-//     }
-
-//     // UI handling
-//     calibratedEnvs.add(distance);
-
-//     btn1m.classList.toggle("active", calibratedEnvs.has(1));
-//     btn3m.classList.toggle("active", calibratedEnvs.has(3));
-
-//     progressText.innerText = `Calibration Progress: ${calibratedEnvs.size} / 2`;
-
-//     if (calibratedEnvs.size === 2) {
-//         summonBtn.disabled = false;
-//         statusText.innerText = "System calibrated. Ready for deployment.";
-//         travelTime = 3;
-//     } else {
-//         statusText.innerText = "Calibration in progress...";
-//     }
-
-//     sampling = false;
-//     const button = distance === 1 ? btn1m : btn3m;
-//     button.disabled = false;
-
-//     calibrationBuffer = [];
-// }
 
 async function selectEnvironment(distance) {
     const button = distance === 1 ? btn1m : btn3m;
@@ -283,9 +167,17 @@ function summonBot() {
 
     if (coordBuffer.length < 1) {
         statusText.innerText = "Error: No location data received yet.";
+        console.warn(`coords buffer < 1. buffer: ${coordBuffer}`)
         return;
     }
 
+    if(!stableCoords.x || !stableCoords.y) {
+        statusText.innerText = "Error: no coordinates received yet. Please try again in 5 seconds.";
+        console.warn(`stable coords empty. x: ${stableCoords.x}, y: ${stableCoords.y}`)
+        return;
+    }
+
+    // change state, lock buttons, update status text
     state = "going";
     lockEnvironment(true);
     summonBtn.disabled = true;
@@ -293,21 +185,21 @@ function summonBot() {
     bot.style.transition = `transform ${travelTime}s ease-in-out`;
     bot.style.transform = "translate(300px, -150px)";
 
-    // PHYSICAL SIGNAL
-    sendBleSignal(1); // Send '1' to start moving
-
     // Use the averaged stable coordinates
     const targetX = stableCoords.x;
     const targetY = stableCoords.y;
 
+    sendBleSignal(1, true, stableCoords.x, stableCoords.y); // Send '1' to start moving
+
+
+    // status update after movement
     setTimeout(() => {
         state = "arrived";
         summonBtn.disabled = false;
         summonBtn.innerText = "RETURN TO BASE";
         statusText.innerText = `Bot arrived at (${targetX.toFixed(2)}m, ${targetY.toFixed(2)}m)`;
 
-        // PHYSICAL SIGNAL
-        sendBleSignal(0); // Send '0' to stop
+        sendBleSignal(0, true, stableCoords.x, stableCoords.y); // Send '0' to stop
 
     }, travelTime * 1000);
 }
@@ -319,7 +211,7 @@ function returnToBase() {
     statusText.innerText = "Returning to base...";
 
     // PHYSICAL SIGNAL
-    sendBleSignal(2); // Send '2' for return command
+    sendBleSignal(2, true, stableCoords.x, stableCoords.y); // Send '2' for return command
 
     bot.style.transform = "translate(0px, 0px)";
 
@@ -328,7 +220,7 @@ function returnToBase() {
         summonBtn.innerText = "SUMMON";
 
         // PHYSICAL SIGNAL
-        sendBleSignal(0); // Send '0' to stop
+        sendBleSignal(0, true, stableCoords.x, stableCoords.y); // Send '0' to stop
 
         calibratedEnvs.clear();
         btn1m.classList.remove("active");
@@ -377,8 +269,8 @@ async function connectBluetooth() {
     }
 }
 
-async function sendBleSignal(value) {
-    // If a heartbeat is happening and this is a MOVE command, wait slightly
+async function sendBleSignal(signal, isPriority = false, xCoord, yCoord) {
+    // If a heartbeat is happening and this is a priority command (move commands), wait slightly
     if (writeInProgress && isPriority) {
         await new Promise(res => setTimeout(res, 100)); // Short 100ms pause
     }
@@ -387,122 +279,14 @@ async function sendBleSignal(value) {
 
     writeInProgress = true;
     try {
-        await characteristic.writeValue(new Uint8Array([value]));
-        console.log("Command sent: " + value);
+        await characteristic.writeValue(new Uint8Array([signal, xCoord, yCoord]));
+        console.log(`BLE sent. Signal: ${signal} | Coordinates: ${xCoord}, ${yCoord}`);
     } catch (error) {
-        console.log("Heartbeat failed or GATT busy");
+        console.log(`Heartbeat failed or GATT busy. isPriority: ${isPriority}`);
     } finally {
         writeInProgress = false;
     }
 }
-
-// function handleNotification(event) {
-//     const decoder = new TextDecoder();
-//     const value = decoder.decode(event.target.value);
-
-//     // ID + RSSI Parsing (assuming format "ID:RSSI")
-//     if (value.includes(":")) {
-//         const [id, rssiStr] = value.split(":");
-//         const rawRssi = parseInt(rssiStr);
-
-//         // Safety: If parsing fails, ignore the packet
-//         if (isNaN(rawRssi)) return;
-        
-//         const filteredRssi = processSignal(id, rawRssi);    
-        
-//         // if sampling for calibration, add to the calibration buffer list ONLY FROM NODE 0
-//         if (sampling && id.includes("0")) {
-//             calibrationBuffer.push(filteredRssi);
-//             // This is your lifeline: if you see this in the console, it's working
-//             console.log(`✅ Buffer Fill: ${calibrationBuffer.length} samples`);
-//         }
-
-//         // If system is calibrated, 
-//         if (calibratedEnvs.size === 2) {
-//             // calculate and show real distance for ALL 3 NODES
-//             const distance = calculateDistance(filteredRssi);
-            
-//             // calculate actual floor distance (since user's phone will be off the ground)
-//             const floorDistance = calculateFloorDistance(distance);
-//             console.log(`Node ${id}: ${distance.toFixed(2)}m away | Floor dist: ${floorDistance.toFixed(2)}m away`);
-
-//             // update distances from all 3 nodes into an array for trilateration
-//             latestDistances[id] = floorDistance;
-
-//             // trilaterate if have distances from all 3 nodes
-//             if (latestDistances["0"] && latestDistances["1"] && latestDistances["2"]) {
-//                 const rawCoords = trilaterate(
-//                     latestDistances["0"], 
-//                     latestDistances["1"], 
-//                     latestDistances["2"]
-//                 );
-
-//                 if (rawCoords) {
-//                     // 1. Add raw math result to Rolling Buffer (Prevents Teleporting)
-//                     coordBuffer.push({ x: rawCoords.x, y: rawCoords.y });
-//                     if (coordBuffer.length > smoothingFactor) coordBuffer.shift();
-
-//                     // 2. Update the background "Stable Target"
-//                     stableCoords.x = coordBuffer.reduce((sum, p) => sum + p.x, 0) / coordBuffer.length;
-//                     stableCoords.y = coordBuffer.reduce((sum, p) => sum + p.y, 0) / coordBuffer.length;
-
-//                     console.log(`Current coords (averaged): (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
-//                 }
-//             }
-            
-//             else { console.log("Failed to trilaterate due to missing value(s)."); }
-//         }
-//     }
-
-// }
-
-// function handleNotification(event) {
-//     const decoder = new TextDecoder();
-//     const rawValue = decoder.decode(event.target.value);
-    
-//     // Clean string: "Node 0 | RSSI: -70"
-//     const cleanValue = rawValue.trim();
-
-//     // Check if the string contains our key markers
-//     if (cleanValue.includes("Node") && cleanValue.includes("RSSI:")) {
-//         try {
-//             // Split by '|' first: ["Node 0 ", " RSSI: -70"]
-//             const sections = cleanValue.split("|");
-            
-//             // Extract ID: Get the number after "Node"
-//             const idMatch = sections[0].match(/\d+/);
-//             const id = idMatch ? idMatch[0] : null;
-
-//             // Extract RSSI: Get the number after "RSSI:"
-//             const rssiMatch = sections[1].match(/-?\d+/);
-//             const rawRssi = rssiMatch ? parseInt(rssiMatch[0]) : NaN;
-
-//             if (id !== null && !isNaN(rawRssi)) {
-//                 const filteredRssi = processSignal(id, rawRssi);    
-                
-//                 // 1. Calibration (Node 0)
-//                 if (sampling && id === "0") {
-//                     calibrationBuffer.push(filteredRssi);
-//                     console.log(`✅ Buffered Node 0: ${filteredRssi} (Count: ${calibrationBuffer.length})`);
-//                 }
-
-//                 // 2. Real-time Tracking (Nodes 0, 1, 2)
-//                 if (calibratedEnvs.size === 2) {
-//                     const distance = calculateDistance(filteredRssi);
-//                     const floorDistance = calculateFloorDistance(distance);
-//                     latestDistances[id] = floorDistance;
-                    
-//                     console.log(`📡 Node ${id} Signal: ${floorDistance.toFixed(2)}m`);
-                    
-//                     // Trigger trilateration if all nodes are present
-//                     checkAndTrilaterate();
-//                 }
-//             }
-//         } catch (e) {
-//             console.warn("Parsing error on string:", cleanValue);
-//         }
-//     }
-// }
 
 function handleNotification(event) {
     const decoder = new TextDecoder();
@@ -552,16 +336,7 @@ function handleNotification(event) {
     }
 }
 
-// Helper to keep trilateration clean
-function checkAndTrilaterate() {
-    if (latestDistances["0"] !== null && latestDistances["1"] !== null && latestDistances["2"] !== null) {
-        const coords = trilaterate(latestDistances["0"], latestDistances["1"], latestDistances["2"]);
-        if (coords) {
-            // Update stableCoords and buffer...
-            console.log("📍 Position Calculated:", coords);
-        }
-    }
-}
+
 
 // Kalman Filter Logic
 class RSSIKalmanFilter {
@@ -630,7 +405,7 @@ function calculateFloorDistance(distance)
     return diff > 0? Math.sqrt(diff) : 0;
 }
 
-function trilaterate(d0, d1, d2) 
+function trilaterate(d0, d1, d2) // returns object w/ x & y coords
 {
     const p0 = snifferAnchors[0];
     const p1 = snifferAnchors[1];
@@ -654,6 +429,17 @@ function trilaterate(d0, d1, d2)
 
     return { x, y };
 
+}
+
+// Helper to keep trilateration clean
+function checkAndTrilaterate() {
+    if (latestDistances["0"] !== null && latestDistances["1"] !== null && latestDistances["2"] !== null) {
+        const coords = trilaterate(latestDistances["0"], latestDistances["1"], latestDistances["2"]);
+        if (coords) {
+            // Update stableCoords and buffer...
+            console.log("📍 Position Calculated:", coords);
+        }
+    }
 }
 
 // Other
