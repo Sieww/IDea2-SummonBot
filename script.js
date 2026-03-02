@@ -425,8 +425,8 @@ function processSignal(nodeId, rawRSSI) {
 
 // Calibration Logic
 function calculateDistance(rssi) {
-    // Check for null or if n_factor is invalid (0 or negative)
-    if (rssiAt1m === null || n_factor <= 0 || n_factor == null) return -1;
+    // // Check for null or if n_factor is invalid (0 or negative)
+    // if (rssiAt1m === null || n_factor <= 0 || n_factor == null) return -1;
 
     const exponent = (rssiAt1m - rssi) / (10 * n_factor);
     return Math.pow(10, exponent);
