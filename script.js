@@ -329,6 +329,7 @@ function handleNotification(event) {
         const filteredRssi = processSignal(id, rawRssi);    
         
         // Calibration Logic (Node 0)
+        // can comment out if not needed
         if (sampling && id === "0") {
             calibrationBuffer.push(filteredRssi);
             console.log(`✅ MATCH! Node ${id} added to buffer. Count: ${calibrationBuffer.length}`);
