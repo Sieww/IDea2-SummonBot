@@ -29,7 +29,7 @@ const activeNodes = {}; // node manager
 
 // Variables for calibration
 let calibrationBuffer = [];
-let rssiAt1m = null;
+let rssiAt1m = -60;
 let rssiAt3m = null;
 let n_factor = 2.0; // path loss exponent, to be calculated. default 2.0
 const calibrationDuration = 4000;
