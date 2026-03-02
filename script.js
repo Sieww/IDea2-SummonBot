@@ -41,6 +41,18 @@ const snifferAnchors = {
     1: { x: 5,   y: 0 },    // Sniffer 1 at 5m on X-axis
     2: { x: 2.5, y: 4.33 }  // Sniffer 2 forming a triangle
 };
+
+// For zone estimation
+const currentClosestZone = null;
+
+const zoneA_ID = 1;
+const zoneB_ID = 2;
+const zoneC_ID = 3;
+
+const zoneA_Coords = {x: 3, y: 3};
+const zoneB_Coords = {x: 3, y: 3};
+const zoneC_Coords = {x: 3, y: 3};
+
 const baseCoords = {x : -1, y: -1}
 const latestDistances = { "0": null, "1": null, "2": null };
 let coordBuffer = [];
@@ -189,7 +201,7 @@ function summonBot() {
     const targetX = stableCoords.x;
     const targetY = stableCoords.y;
 
-    sendBleSignal(1, true, stableCoords.x, stableCoords.y); // Send '1' to start moving
+    sendBleSignal(1, true, currentClosestZone); // Send '1' to start moving
 
 
     // status update after movement
@@ -199,7 +211,7 @@ function summonBot() {
         summonBtn.innerText = "RETURN TO BASE";
         statusText.innerText = `Bot arrived at (${targetX.toFixed(2)}m, ${targetY.toFixed(2)}m)`;
 
-        sendBleSignal(0, true, stableCoords.x, stableCoords.y); // Send '0' to stop
+        sendBleSignal(0, true, currentClosestZone); // Send '0' to stop
 
     }, travelTime * 1000);
 }
@@ -211,7 +223,7 @@ function returnToBase() {
     statusText.innerText = "Returning to base...";
 
     // PHYSICAL SIGNAL
-    sendBleSignal(2, true, stableCoords.x, stableCoords.y); // Send '2' for return command
+    sendBleSignal(2, true, currentClosestZone); // Send '2' for return command
 
     bot.style.transform = "translate(0px, 0px)";
 
@@ -220,7 +232,7 @@ function returnToBase() {
         summonBtn.innerText = "SUMMON";
 
         // PHYSICAL SIGNAL
-        sendBleSignal(0, true, stableCoords.x, stableCoords.y); // Send '0' to stop
+        sendBleSignal(0, true, currentClosestZone); // Send '0' to stop
 
         calibratedEnvs.clear();
         btn1m.classList.remove("active");
@@ -269,7 +281,7 @@ async function connectBluetooth() {
     }
 }
 
-async function sendBleSignal(signal, isPriority = false, xCoord, yCoord) {
+async function sendBleSignal(signal, isPriority = false, zoneID) {
     // If a heartbeat is happening and this is a priority command (move commands), wait slightly
     if (writeInProgress && isPriority) {
         await new Promise(res => setTimeout(res, 100)); // Short 100ms pause
@@ -279,8 +291,8 @@ async function sendBleSignal(signal, isPriority = false, xCoord, yCoord) {
 
     writeInProgress = true;
     try {
-        await characteristic.writeValue(new Uint8Array([signal, xCoord, yCoord]));
-        console.log(`BLE sent. Signal: ${signal} | Coordinates: ${xCoord}, ${yCoord}`);
+        await characteristic.writeValue(new Uint8Array([signal, zoneID]));
+        console.log(`BLE sent. Signal: ${signal} | Coordinates: ${xCoord}, ${yCoord} | ZoneID: ${zoneID}`);
     } catch (error) {
         console.log(`Heartbeat failed or GATT busy. isPriority: ${isPriority}`);
     } finally {
@@ -333,6 +345,25 @@ function handleNotification(event) {
         }
     } else {
         console.log("⚠️ Still can't parse this string:", rawValue);
+    }
+
+    // 3. estimate closest zone if have stable coords
+    if (stableCoords.x && stableCoords.y) {
+        currentClosestZone = estimateZone(stableCoords);
+
+        switch (currentClosestZone) {
+        case zoneA_ID:
+            console.log("📍 Estimated Zone: A");
+            break;
+        case zoneB_ID:
+            console.log("📍 Estimated Zone: B");
+            break;
+        case zoneC_ID:
+            console.log("📍 Estimated Zone: C");
+            break;
+        default:
+            console.log("No Zone Estimated due to missing stable coordinates.");
+        }
     }
 }
 
@@ -440,6 +471,21 @@ function checkAndTrilaterate() {
             console.log("📍 Position Calculated:", coords);
         }
     }
+}
+
+// to estimate closest zone (A, B, or C) based on current coordinates and zone coordinates
+function estimateZone(coords) {
+    const distToA = Math.hypot(coords.x - zoneA_Coords.x, coords.y - zoneA_Coords.y);
+    const distToB = Math.hypot(coords.x - zoneB_Coords.x, coords.y - zoneB_Coords.y);
+    const distToC = Math.hypot(coords.x - zoneC_Coords.x, coords.y - zoneC_Coords.y);
+
+    const minDist = Math.min(distToA, distToB, distToC);
+
+    if (minDist === distToA) return zoneA_ID;
+    if (minDist === distToB) return zoneB_ID;
+    if (minDist === distToC) return zoneC_ID;
+
+    return -1; // If no zone is closest
 }
 
 // Other
