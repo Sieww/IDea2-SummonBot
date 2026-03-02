@@ -59,110 +59,110 @@ let coordBuffer = [];
 const smoothingFactor = 10;
 let stableCoords = {x: 0, y: 0};
 
-async function selectEnvironment(distance) {
-    const button = distance === 1 ? btn1m : btn3m;
-    if (!device) {
-        try {
-            await connectBluetooth();
-            // Give the BLE stack a moment to breathe
-            await new Promise(r => setTimeout(r, 600)); 
-        } catch (err) {
-            statusText.innerText = "Connection required.";
-            return;
-        }
-    }
+// async function selectEnvironment(distance) {
+//     const button = distance === 1 ? btn1m : btn3m;
+//     if (!device) {
+//         try {
+//             await connectBluetooth();
+//             // Give the BLE stack a moment to breathe
+//             await new Promise(r => setTimeout(r, 600)); 
+//         } catch (err) {
+//             statusText.innerText = "Connection required.";
+//             return;
+//         }
+//     }
 
-    if (state !== "idle" || sampling) return;
+//     if (state !== "idle" || sampling) return;
 
-    // RESET EVERYTHING BEFORE STARTING
-    calibrationBuffer = []; 
-    sampling = true; 
+//     // RESET EVERYTHING BEFORE STARTING
+//     calibrationBuffer = []; 
+//     sampling = true; 
 
-    button.disabled = true;
-    statusText.innerText = `Calibrating ${distance}m...`;
+//     button.disabled = true;
+//     statusText.innerText = `Calibrating ${distance}m...`;
 
-    let start = null;
-    const duration = calibrationDuration;
+//     let start = null;
+//     const duration = calibrationDuration;
 
-    function animate(timestamp) {
-        if (!start) start = timestamp;
-        let elapsed = timestamp - start;
-        let percent = Math.min((elapsed / duration) * 100, 100);
+//     function animate(timestamp) {
+//         if (!start) start = timestamp;
+//         let elapsed = timestamp - start;
+//         let percent = Math.min((elapsed / duration) * 100, 100);
         
         
-        if (elapsed < duration) {
-            requestAnimationFrame(animate);
-        } else {
-            // End of timer
-            finalizeCalibration(distance);
-        }
-    }
-    requestAnimationFrame(animate);
-}
+//         if (elapsed < duration) {
+//             requestAnimationFrame(animate);
+//         } else {
+//             // End of timer
+//             finalizeCalibration(distance);
+//         }
+//     }
+//     requestAnimationFrame(animate);
+// }
 
-function finalizeCalibration(distance) {
-    // 1. STOP SAMPLING IMMEDIATELY
-    sampling = false;
+// function finalizeCalibration(distance) {
+//     // 1. STOP SAMPLING IMMEDIATELY
+//     sampling = false;
 
-    // 2. DEFINE BUTTON AT THE START (Fixes your ReferenceError)
-    const button = distance === 1 ? btn1m : btn3m;
-    button.disabled = false;
+//     // 2. DEFINE BUTTON AT THE START (Fixes your ReferenceError)
+//     const button = distance === 1 ? btn1m : btn3m;
+//     button.disabled = false;
 
-    console.log("Finalizing... Buffer count:", calibrationBuffer.length);
+//     console.log("Finalizing... Buffer count:", calibrationBuffer.length);
 
-    // 3. CHECK BUFFER
-    if (calibrationBuffer.length === 0) {
-        statusText.innerText = "Error: No signal from Node 0!";
-        console.error("Calibration failed: Buffer is empty.");
-        return;
-    }
+//     // 3. CHECK BUFFER
+//     if (calibrationBuffer.length === 0) {
+//         statusText.innerText = "Error: No signal from Node 0!";
+//         console.error("Calibration failed: Buffer is empty.");
+//         return;
+//     }
     
-    const averageRSSI = calibrationBuffer.reduce((a, b) => a + b, 0) / calibrationBuffer.length;
+//     const averageRSSI = calibrationBuffer.reduce((a, b) => a + b, 0) / calibrationBuffer.length;
 
-    if (distance === 1) {
-        rssiAt1m = averageRSSI;
-        console.log(`[CALIBRATION] 1m set: ${rssiAt1m.toFixed(2)}`);
-    } else {
-        rssiAt3m = averageRSSI;
-        console.log(`[CALIBRATION] 3m set: ${rssiAt3m.toFixed(2)}`);
-    }
+//     if (distance === 1) {
+//         rssiAt1m = averageRSSI;
+//         console.log(`[CALIBRATION] 1m set: ${rssiAt1m.toFixed(2)}`);
+//     } else {
+//         rssiAt3m = averageRSSI;
+//         console.log(`[CALIBRATION] 3m set: ${rssiAt3m.toFixed(2)}`);
+//     }
 
-    // Calculate N-Factor if both exist
-    if (rssiAt1m !== null && rssiAt3m !== null) {
-        n_factor = (rssiAt1m - rssiAt3m) / 4.771;
-        if (n_factor < 2.0) n_factor = 2.0; 
-        console.log(`[CALIBRATION] New n_factor: ${n_factor.toFixed(2)}`);
-    }
+//     // Calculate N-Factor if both exist
+//     if (rssiAt1m !== null && rssiAt3m !== null) {
+//         n_factor = (rssiAt1m - rssiAt3m) / 4.771;
+//         if (n_factor < 2.0) n_factor = 2.0; 
+//         console.log(`[CALIBRATION] New n_factor: ${n_factor.toFixed(2)}`);
+//     }
 
-    calibratedEnvs.add(distance);
-    btn1m.classList.toggle("active", calibratedEnvs.has(1));
-    btn3m.classList.toggle("active", calibratedEnvs.has(3));
+//     calibratedEnvs.add(distance);
+//     btn1m.classList.toggle("active", calibratedEnvs.has(1));
+//     btn3m.classList.toggle("active", calibratedEnvs.has(3));
     
-    progressText.innerText = `Calibration Progress: ${calibratedEnvs.size} / 2`;
+//     progressText.innerText = `Calibration Progress: ${calibratedEnvs.size} / 2`;
 
-    if (calibratedEnvs.size === 2) {
-        summonBtn.disabled = false;
-        statusText.innerText = "Ready!";
-    }
-}
+//     if (calibratedEnvs.size === 2) {
+//         summonBtn.disabled = false;
+//         statusText.innerText = "Ready!";
+//     }
+// }
 
-/* RECALIBRATE BUTTON */
-recalibrateBtn.addEventListener("click", () => {
-    if (state !== "idle" || sampling) return;
+// /* RECALIBRATE BUTTON */
+// recalibrateBtn.addEventListener("click", () => {
+//     if (state !== "idle" || sampling) return;
 
-    calibratedEnvs.clear();
-    btn1m.classList.remove("active");
-    btn3m.classList.remove("active");
-    progressText.innerText = "Calibration Progress: 0 / 2";
-    summonBtn.disabled = true;
-    statusText.innerText = "Calibration reset. Select both environments.";
+//     calibratedEnvs.clear();
+//     btn1m.classList.remove("active");
+//     btn3m.classList.remove("active");
+//     progressText.innerText = "Calibration Progress: 0 / 2";
+//     summonBtn.disabled = true;
+//     statusText.innerText = "Calibration reset. Select both environments.";
 
-    n_factor = null;
-    rssiAt1m = null;
-    rssiAt3m = null; 
-    console.log(`n factor: ${n_factor} | 1m rssi: ${rssiAt1m} | 3m rssi: ${rssiAt3m}`);
+//     n_factor = null;
+//     rssiAt1m = null;
+//     rssiAt3m = null; 
+//     console.log(`n factor: ${n_factor} | 1m rssi: ${rssiAt1m} | 3m rssi: ${rssiAt3m}`);
 
-});
+// });
 
 /* SUMMON BUTTON */
 summonBtn.addEventListener("click", async () => {
@@ -328,24 +328,24 @@ function handleNotification(event) {
     if (id !== null && !isNaN(rawRssi)) {
         const filteredRssi = processSignal(id, rawRssi);    
         
-        // Calibration Logic (Node 0)
-        // can comment out if not needed
-        if (sampling && id === "0") {
-            calibrationBuffer.push(filteredRssi);
-            console.log(`✅ MATCH! Node ${id} added to buffer. Count: ${calibrationBuffer.length}`);
-        }
+        // // Calibration Logic (Node 0)
+        // // can comment out if not needed
+        // if (sampling && id === "0") {
+        //     calibrationBuffer.push(filteredRssi);
+        //     console.log(`✅ MATCH! Node ${id} added to buffer. Count: ${calibrationBuffer.length}`);
+        // }
 
         // Live Tracking Logic
-        if (calibratedEnvs.size === 2) {
+        // if (calibratedEnvs.size === 2) {
             const distance = calculateDistance(filteredRssi);
             const floorDistance = calculateFloorDistance(distance);
             latestDistances[id] = floorDistance;
             
             console.log(`📡 Tracking Node ${id}: ${floorDistance.toFixed(2)}m`);
             checkAndTrilaterate();
-        }
-    } else {
-        console.log("⚠️ Still can't parse this string:", rawValue);
+        // }
+    // } else {
+        // console.log("⚠️ Still can't parse this string:", rawValue);
     }
 
     // 3. estimate closest zone if have stable coords
