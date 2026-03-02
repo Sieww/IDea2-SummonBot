@@ -49,9 +49,9 @@ const zoneA_ID = 1;
 const zoneB_ID = 2;
 const zoneC_ID = 3;
 
-const zoneA_Coords = {x: 3, y: 3};
-const zoneB_Coords = {x: 3, y: 3};
-const zoneC_Coords = {x: 3, y: 3};
+const zoneA_Coords = {x: 0, y: 0};
+const zoneB_Coords = {x: 5, y: 0};
+const zoneC_Coords = {x: 2.5, y: 4.33};
 
 const baseCoords = {x : -1, y: -1}
 const latestDistances = { "0": null, "1": null, "2": null };
