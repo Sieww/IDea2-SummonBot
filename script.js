@@ -219,7 +219,7 @@ function summonBot() {
 
         sendBleSignal(0, true, currentClosestZone); // Send '0' to stop
 
-    }, travelTime * 15000);
+    }, travelTime * 90000);
 }
 
 function returnToBase() {
@@ -500,4 +500,5 @@ function estimateZone(coords) {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
 
