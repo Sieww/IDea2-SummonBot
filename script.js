@@ -1,20 +1,14 @@
 const bot = document.getElementById("bot");
 const summonBtn = document.getElementById("actionBtn");
-const recalibrateBtn = document.getElementById("recalibrateBtn");
 const statusText = document.getElementById("status");
-const progressText = document.getElementById("progressText");
+const etaText = document.getElementById("eta");
+const capacityBar = document.getElementById("capacityBar");
+const capacityText = document.getElementById("capacityText");
 
-const btn1m = document.getElementById("btn1m");
-const btn3m = document.getElementById("btn3m");
-
-let calibratedEnvs = new Set();
-let travelTime = 2;
 let state = "idle";
-let sampling = false; // prevents double sampling
-
-/* ENV BUTTONS */
-btn1m.addEventListener("click", async() => await selectEnvironment(1));
-btn3m.addEventListener("click", async() => await selectEnvironment(3));
+const travelTime = 90;
+let capacity = 40;
+let countdownInterval;
 
 // ESP32 IDs
 const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -164,6 +158,21 @@ let stableCoords = {x: 0, y: 0};
 
 // });
 
+// Capacity things
+
+updateCapacityUI();
+
+function increaseCapacity() {
+    capacity += 20;
+    if (capacity > 100) capacity = 100;
+    updateCapacityUI();
+}
+
+function updateCapacityUI() {
+    capacityBar.style.width = capacity + "%";
+    capacityText.innerText = capacity + "%";
+}
+
 /* SUMMON BUTTON */
 summonBtn.addEventListener("click", async () => {
     // 1. FORCE CONNECTION FIRST
@@ -187,7 +196,28 @@ summonBtn.addEventListener("click", async () => {
     }
 });
 
+// TIMER things
+function startCountdown(seconds) {
+    let timeLeft = seconds;
+    etaText.innerText = timeLeft + "s";
+
+    clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+            etaText.innerText = timeLeft + "s";
+        } else {
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
+}
+
 function summonBot() {
+
+    if (capacity >= 100) {
+        statusText.innerText = "Bin full. Return to base.";
+        return;
+    }
     
     if(!stableCoords.x || !stableCoords.y) {
         statusText.innerText = "Error: no coordinates received yet. Please try again in 5 seconds.";
@@ -197,11 +227,13 @@ function summonBot() {
 
     // change state, lock buttons, update status text
     state = "going";
-    lockEnvironment(true);
     summonBtn.disabled = true;
     statusText.innerText = "Bot en route...";
+
+    startCountdown(travelTime);
+
     bot.style.transition = `transform ${travelTime}s ease-in-out`;
-    bot.style.transform = "translate(300px, -150px)";
+    bot.style.transform = "translate(260px, -150px)";
 
     // Use the averaged stable coordinates
     const targetX = stableCoords.x;
@@ -213,13 +245,15 @@ function summonBot() {
     // status update after movement
     setTimeout(() => {
         state = "arrived";
-        summonBtn.disabled = false;
-        summonBtn.innerText = "RETURN TO BASE";
+        button.disabled = false;
+        button.innerText = "RETURN TO BASE";
+        etaText.innerText = "0s";
         statusText.innerText = `Bot arrived at (${targetX.toFixed(2)}m, ${targetY.toFixed(2)}m)`;
+        increaseCapacity();
 
         sendBleSignal(0, true, currentClosestZone); // Send '0' to stop
 
-    }, travelTime * 90000);
+    }, travelTime * 1000);
 }
 
 function returnToBase() {
@@ -228,6 +262,8 @@ function returnToBase() {
     summonBtn.innerText = "RETURNING...";
     statusText.innerText = "Returning to base...";
 
+    startCountdown(travelTime);
+
     // PHYSICAL SIGNAL
     sendBleSignal(2, true, currentClosestZone); // Send '2' for return command
 
@@ -235,26 +271,18 @@ function returnToBase() {
 
     setTimeout(() => {
         state = "idle";
-        summonBtn.innerText = "SUMMON";
+        summonBtn.innerText = "SUMMON BOT";
+        summonBtn.disabled = false;
 
+        statusText.innerText = "Ready for deployment.";
+        etaText.innerText = "--";
+        capacity = 0;
+        updateCapacityUI();
+        
         // PHYSICAL SIGNAL
         sendBleSignal(0, true, currentClosestZone); // Send '0' to stop
 
-        calibratedEnvs.clear();
-        btn1m.classList.remove("active");
-        btn3m.classList.remove("active");
-        progressText.innerText = "Calibration Progress: 0 / 2";
-        lockEnvironment(false);
-        statusText.innerText = "Calibration required.";
     }, travelTime * 1000);
-}
-
-function lockEnvironment(lock) {
-    // btn1m.disabled = lock;
-    // btn3m.disabled = lock;
-    // recalibrateBtn.disabled = lock;
-
-    console.log(`environment lock set to: ${lock}`);
 }
 
 // ======= Functions specific to BLE trilateration subsystem =====================
@@ -500,5 +528,4 @@ function estimateZone(coords) {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
 
